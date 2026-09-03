@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+*.db
+*.log
+bank_data/*.db
+bank_data/*.json
+asfi_central.db
+asfi_audit.log
+.DS_Store

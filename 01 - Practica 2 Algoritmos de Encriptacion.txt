@@ -1,0 +1,166 @@
+﻿PRÁCTICA 2  
+Plataforma Distribuida de Conversión Monetaria Interbancaria – ASFI
+	1. Contexto del Problema
+Desde la gestión 2023, el Estado Plurinacional de Bolivia atraviesa una disminución sostenida de las Reservas Internacionales Netas (RIN), generando restricciones en el acceso a divisas extranjeras dentro del sistema financiero nacional.
+Como medida de estabilización macroeconómica, la Autoridad de Supervisión del Sistema Financiero (ASFI) ha dispuesto la conversión obligatoria de todas las cuentas denominadas en dólares estadounidenses (USD) a su equivalente en moneda nacional (Bs.), aplicando el tipo de cambio oficial o referencial publicado por el Banco Central de Bolivia (BCB). https://www.bcb.gob.bo/
+Cada entidad financiera participante (Banco) dispone de su propia infraestructura tecnológica para la protección de la información sensible de clientes, implementando distintos mecanismos de cifrado criptográfico para el resguardo de saldos y datos personales. Esta diversidad tecnológica introduce un entorno de heterogeneidad criptográfica, que dificulta la interoperabilidad segura entre sistemas financieros distribuidos.
+Ante este escenario, la ASFI plantea la implementación de una Plataforma Distribuida de Consolidación y Conversión Monetaria, cuya finalidad es:
+* Acceder de forma segura a los saldos en USD almacenados en cada entidad financiera.
+* Desencriptar la información utilizando las llaves criptográficas provistas por la ASFI a los bancos.
+* La ASFI Realizara la conversión monetaria a Bs. utilizando el tipo de cambio oficial o paralelo del BCB .
+* Registrar el saldo original en USD y el saldo convertido en Bs. dentro de una base de datos centralizada de la ASFI.
+* Auditar el proceso garantizando:   Confidencialidad | Integridad | Disponibilidad |  Trazabilidad | No repudio
+Considerando el volumen aproximado de 12 millones de cuentas bancarias, la información sensible está almacenada en una base de datos de cada banco, en la cual se almacenan los datos cifrados.
+  seguridad criptográfica |  eficiencia temporal | costo computacional
+Entidades Financieras Participantes
+Banco
+	Nro. Cuentas
+	Algoritmo de Encriptación
+	Banco Unión S.A.
+	2,247,210
+	Cifrado César
+	Banco Mercantil Santa Cruz S.A.
+	1,997,520
+	Cifrado Atbash
+	Banco Nacional de Bolivia S.A. (BNB)
+	1,498,140
+	Cifrado Vigenère
+	Banco de Crédito de Bolivia S.A. (BCP)
+	1,398,264
+	Cifrado Playfair
+	Banco BISA S.A.
+	1,048,698
+	Cifrado Hill
+	Banco Ganadero S.A.
+	948,822
+	DES
+	Banco Económico S.A.
+	848,946
+	3DES
+	Banco Prodem S.A.
+	749,070
+	Blowfish
+	Banco Solidario S.A.
+	549,318
+	Twofish
+	Banco Fortaleza S.A.
+	349,566
+	AES
+	Banco FIE S.A.
+	399,504
+	RSA
+	Banco PYME de la Comunidad S.A.
+	224,721
+	ElGamal
+	Banco de Desarrollo Productivo S.A.M.
+	99,876
+	ECC
+	Banco de la Nación Argentina
+	19,975
+	ChaCha20
+	https://drive.google.com/file/d/1mIJC5KPxW3SsK3342LEo75BRXsYP8p7x/view?usp=sharing Solo se tomará una muestra del 1 % 
+
+
+2. Objetivo de la Práctica
+El BCB esta en busca de una empresa (Su Equipo) para implementar un sistema distribuido seguro que permita hacer la actualización/conversión de cuentas :
+* Con el juego de datos deben popular todas las bases de datos según su algoritmo de encriptación de cada  banco para datos sensibles ; 14 bases de datos Bancarias, una por cada entidad financiera.
+* Desarrollar un servicio API por entidad que exponga los datos cifrados conforme a su algoritmo de encriptación.
+* Gestionar las llaves criptográficas entregadas a ASFI para el descifrado de información sensible.
+* Consultar dinámicamente el tipo de cambio oficial desde el BCB en función de la fecha y hora de conversión.
+   * La cotización del dólar variará cada 3 minutos (Configurable).
+   * Se manejará una precisión de hasta 4 decimales.
+   * El valor podrá oscilar entre ±0.9999 respecto a un tipo de cambio base.
+* Registrar en un archivo de auditoría (log):
+   * Timestamp de la operación
+   * Tipo de cambio Oficial / Referencial aplicado
+   * CuentaId
+   * BancoId
+* Actualizar el saldo convertido en Bs. en la base de datos central de la ASFI t registrar el saldo original en USD y el saldo convertido en Bs.
+* Generar un código de verificación de transacción compuesto por 8 caracteres alfanuméricos en formato hexadecimal (0–9, A–F). Este código permitirá a la entidad financiera actualizar el saldo del cliente y deberá ser registrado en la base de datos del banco correspondiente. La validación se realizará verificando que cada transacción coincida con su respectivo código de verificación.
+* Validar la consistencia entre el saldo actualizado en el banco y el saldo registrado en la ASFI (Es decir debe hacer una copia de la de cada banco en la base de datos de la ASFI).
+3. Requerimientos Técnicos
+* Implementación de al menos tres motores de bases de datos relacionales y dos motores de bases de datos no relacionales para los bancos . y una base de datos que consolidara toda la informacion de las cuentas de los ahoritas en el motor de base de datos Relacional 
+* Desarrolle mecanismos de comunicacion (microservicios) para comunicar los bancos y los la ASFI  utilizando alguno de los siguientes lenguajes:  C#, Java, Python
+* Implementación de: Algoritmos de cifrado simétrico , Algoritmos de cifrado asimétrico
+* Comunicación segura entre nodos mediante protocolos cifrados.
+* No existe un frontend 
+4. Consideraciones de Seguridad
+El sistema deberá contemplar mecanismos de mitigación frente a:
+* Intercepción de datos en tránsito (Man-in-the-Middle).
+* Ataques de repetición (Replay Attacks).
+* Suplantación de identidad entre nodos (Spoofing).
+
+* Manipulación maliciosa del tipo de cambio.
+* Desincronización en la gestión de llaves criptográficas.
+* Alteración de la integridad de los datos posconversión.
+5. Entregables Esperados
+   * Script o código para el poblamiento de datos.
+   * Cinco (5) scripts para la creación de bases de datos, tanto relacionales como no relacionales.
+   * Código de encriptación (adjuntar enlace a repositorio o archivo .zip).
+   * Código que simule la fluctuación del tipo de cambio del dólar.
+   * Código para el proceso de transporte de datos hacia la base de datos de la ASFI (adjuntar enlace a repositorio o archivo .zip).
+   * Script de creación de la base de datos de la ASFI.
+6. Calificación de la práctica 
+Entregable
+	Puntaje
+	14 Bases de datos pobladas con información base
+	20 pts
+	Servicio de transferencia de datos por entidad financiera
+	15 pts
+	Servicio de recepción y descifrado de datos en la ASFI
+	15 pts
+	Log de auditoría de transacciones y tipo de cambio
+	10 pts
+	8 Consultas a la base de datos  y preguntas  (Sin IA)
+	40 pts
+	Una base de datos orientada a grafos de las 14 (dos nodos cliente y cuenta)
+	20 pts
+	Barrido paralelo (Optimización de tiempo)
+	10 pts 
+	
+
+La idea es que todo este proceso se haga en el menor tiempo posible , es decir, en lo posible que se haga de forma paralela, para que la fluctuación del dólar no afecte a algunos y beneficie a otros
+
+
+Este caso simula un entorno real de interoperabilidad financiera bajo restricciones monetarias, donde la seguridad de la información en sistemas distribuidos constituye un componente crítico para preservar la consistencia, confiabilidad y legitimidad de procesos masivos de conversión monetaria interinstitucional.
+
+
+Bancos(
+BancoId INT PRIMARY KEY,
+Nombre VARCHAR(100),
+AlgoritmoEncriptacion VARCHAR(50)
+)
+
+
+Cuentas(
+CuentaId BIGINT PRIMARY KEY,
+BancoId INT,
+SaldoUSD DECIMAL(18,4),
+SaldoBs DECIMAL(18,4),
+FechaConversion DATETIME,
+CodigoVerificacion CHAR(8),
+FOREIGN KEY (BancoId) REFERENCES Bancos(BancoId)
+)
+
+
+
+
+  
+
+  
+
+  
+
+  
+
+  
+
+
+
+
+
+________________
+
+
+Sistemas Distribuidos
+Practica 1: Implementación de un Storage Cluster
