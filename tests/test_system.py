@@ -36,7 +36,7 @@ class TestBCBEngine(unittest.TestCase):
 class TestParallelSweep(unittest.TestCase):
     def test_sweeper_execution(self):
         from databases.seed_data import seed_bank_databases_from_excel
-        seed_bank_databases_from_excel("cuentas_bancarias_muestra.csv")
+        seed_bank_databases_from_excel("01 - Practica 2 Dataset.csv")
         async def run_sweep():
             return await sweeper.execute_parallel_sweep()
         res = asyncio.run(run_sweep())

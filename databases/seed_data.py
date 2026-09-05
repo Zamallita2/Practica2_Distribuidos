@@ -121,7 +121,11 @@ def seed_bank_databases_from_csv(csv_path: str = "01 - Practica 2 Dataset.csv", 
 
     print(f"\n🎉 ¡Población de datos completada! Se ingresaron {total_inserted} cuentas en las 14 bases de datos bancarias.\n")
 
+# Alias para compatibilidad
+seed_bank_databases_from_excel = seed_bank_databases_from_csv
+
 if __name__ == "__main__":
+
     parser = argparse.ArgumentParser(description="Poblador de BDs con Muestra Parametrizable de Dataset CSV")
     parser.add_argument("--percent", "-p", type=float, default=1.0, help="Porcentaje de muestra (ej: 1.0 para 1%%, 2.5 para 2.5%%, 5.0 para 5%%)")
     parser.add_argument("--file", "-f", type=str, default="01 - Practica 2 Dataset.csv", help="Ruta del archivo CSV")
