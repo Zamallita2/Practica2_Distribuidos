@@ -1,0 +1,28 @@
+services:
+  mysql:
+    image: mysql:8
+    container_name: bank2_mercantil_mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root123
+      MYSQL_DATABASE: banco_mercantil
+    ports:
+      - "3306:3306"
+
+  postgres:
+    image: postgres:16
+    container_name: bank3_bnb_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+      POSTGRES_DB: banco_bnb
+    ports:
+      - "5432:5432"
+
+  mongodb:
+    image: mongo:7
+    container_name: bank4_bcp_mongo
+    restart: always
+    ports:
+      - "27017:27017"

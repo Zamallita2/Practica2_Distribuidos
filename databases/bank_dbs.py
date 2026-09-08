@@ -7,6 +7,13 @@ import sqlite3
 import os
 import json
 from config import BANKS
+from databases.banks_1_5 import (
+    BankUnionSQLiteAdapter,
+    BankMercantilMySQLAdapter,
+    BankBNBPostgresAdapter,
+    BankBCPMongoAdapter,
+    BankBISAGraphAdapter,
+)
 
 try:
     import networkx as nx
@@ -28,17 +35,37 @@ except ImportError:
         def __contains__(self, item):
             return item in self.nodes_data
 
+# Bancos 1-5 (Tarea 2, Integrante 1): cada uno usa su propio motor de BD real
+# (SQLite, MySQL, PostgreSQL, MongoDB, Grafo) en vez de la simulacion generica
+# de abajo, que sigue aplicando tal cual para los Bancos 6-14.
+BANKS_1_5_ADAPTER_CLASSES = {
+    1: BankUnionSQLiteAdapter,
+    2: BankMercantilMySQLAdapter,
+    3: BankBNBPostgresAdapter,
+    4: BankBCPMongoAdapter,
+    5: BankBISAGraphAdapter,
+}
+
 class BankDatabaseManager:
     """Manages storage for each of the 14 banks using assigned database paradigms."""
     def __init__(self, data_dir: str = "bank_data"):
         self.data_dir = data_dir
         os.makedirs(self.data_dir, exist_ok=True)
         self.graph_dbs = {} # Graph DB storage for Bank 5
+        self.banks_1_5 = {
+            b_id: adapter_cls(data_dir=self.data_dir)
+            for b_id, adapter_cls in BANKS_1_5_ADAPTER_CLASSES.items()
+        }
         self._init_bank_stores()
 
     def _init_bank_stores(self):
+        for b_id, adapter in self.banks_1_5.items():
+            adapter.create_schema()
+
         for b in BANKS:
             b_id = b["id"]
+            if b_id in self.banks_1_5:
+                continue
             if b["db_engine"] == "NetworkX/Neo4j" or "Grafo" in b["db_type"]:
                 self.graph_dbs[b_id] = nx.DiGraph() if HAS_NETWORKX else SimpleGraph()
             elif "MongoDB" in b["db_engine"] or "JSON" in b["db_engine"]:
@@ -65,6 +92,10 @@ class BankDatabaseManager:
 
 
     def insert_encrypted_account(self, bank_id: int, cuenta_id: int, cliente_nombre: str, saldo_cifrado: str):
+        if bank_id in self.banks_1_5:
+            self.banks_1_5[bank_id].insert_encrypted_account(cuenta_id, cliente_nombre, saldo_cifrado)
+            return
+
         b_info = next((b for b in BANKS if b["id"] == bank_id), None)
         if not b_info:
             return
@@ -113,6 +144,9 @@ class BankDatabaseManager:
             conn.close()
 
     def get_encrypted_accounts(self, bank_id: int):
+        if bank_id in self.banks_1_5:
+            return self.banks_1_5[bank_id].get_encrypted_accounts()
+
         b_info = next((b for b in BANKS if b["id"] == bank_id), None)
         if not b_info:
             return []
@@ -155,6 +189,9 @@ class BankDatabaseManager:
             ]
 
     def update_verification_code(self, bank_id: int, cuenta_id: int, saldo_bs: float, verification_code: str, timestamp: str):
+        if bank_id in self.banks_1_5:
+            return self.banks_1_5[bank_id].update_verification_code(cuenta_id, saldo_bs, verification_code, timestamp)
+
         b_info = next((b for b in BANKS if b["id"] == bank_id), None)
         if not b_info:
             return False
