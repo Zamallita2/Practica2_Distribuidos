@@ -45,6 +45,7 @@ Este módulo implementa la arquitectura de base de datos relacional centralizada
 - **Motor de Procesamiento & Auditoría**: [asfi_central/process_engine.py](asfi_central/process_engine.py)
 - **Pruebas Unitarias Tarea 7**: [tests/test_tarea7_asfi_db.py](tests/test_tarea7_asfi_db.py)
 - **Pruebas Unitarias Tarea 8**: [tests/test_tarea8_sweeper.py](tests/test_tarea8_sweeper.py)
+- **Pruebas Unitarias Tarea 9**: [tests/test_tarea9_orchestrator.py](tests/test_tarea9_orchestrator.py)
 
 ---
 
@@ -52,19 +53,27 @@ Este módulo implementa la arquitectura de base de datos relacional centralizada
 
 Este módulo implementa el motor de extracción concurrente y asíncrona de saldos cifrados desde las 14 entidades financieras.
 
+---
+
+## ⚙️ Tarea 9: Orquestador Central y Flujo Completo ASFI
+
+Este módulo coordina el flujo end-to-end entre la ASFI, el BCB y los 14 bancos.
+
 ### 📋 Requerimientos Cumplidos
 
-1. **Conexión a los 14 Bancos**: Extracción paralela vía API HTTP (asíncrona) o capa directa de base de datos (`asyncio`).
-2. **Consultas Simultáneas**: Uso de `asyncio.gather(*tasks, return_exceptions=True)` para ejecutar las 14 llamadas concurrentes.
-3. **Instante de Referencia $t_0$**: Captura y fijación del tipo de cambio BCB al momento $t_0$ antes de iniciar el lote, garantizando que el 100% de las transacciones del barrido se procesen bajo la misma cotización sin sesgos.
-4. **Gestión de Errores y Resiliencia**: Captura individual de excepciones, fallos de red o errores HTTP por banco sin detener la ejecución del barrido.
-5. **Consolidación**: Generación de un reporte resumido (`successful_banks`, `failed_banks`, `total_processed`, `elapsed_seconds`, `t0_timestamp`).
+1. **Flujo Central de Procesamiento**: Método maestro `run_full_orchestration_cycle()` que ejecuta el barrido paralelo, descifrado, conversión, sincronización y auditoría.
+2. **Descifrado de Saldos**: Descifrado de la carga útil sensible utilizando las llaves de encriptación de cada banco.
+3. **Conversión a Bolivianos (Bs.)**: Conversión oficial USD $\rightarrow$ Bs. con cotización BCB fijada en $t_0$.
+4. **Código Verificador Hexadecimal (8 caracteres)**: Generación de token alfanumérico único (`0–9, A–F`) por transacción.
+5. **Sincronización con Bancos**: Retroalimentación y actualización del saldo en Bs. y código verificador en las bases de datos bancarias.
+6. **Auditoría Integral**: Persistencia en la tabla `AuditLogs` de la ASFI DB y registro físico en el archivo [`asfi_audit.log`](asfi_audit.log).
+7. **Tolerancia a Bancos Pendientes o Desconectados**: Resiliencia del orquestador si algunos bancos están desconectados o en trabajo en progreso.
 
 ---
 
-## 🚀 Ejecución de Pruebas Tarea 7 y Tarea 8
+## 🚀 Ejecución de Pruebas Tarea 7, 8 y 9
 
-Para validar el funcionamiento de los módulos del Integrante 3:
+Para validar los módulos del Integrante 3:
 
 ```bash
 # Probar Base de Datos Central ASFI (Tarea 7):
@@ -73,7 +82,11 @@ python3 -m unittest tests/test_tarea7_asfi_db.py
 # Probar Motor de Barrido Paralelo (Tarea 8):
 python3 -m unittest tests/test_tarea8_sweeper.py
 
-# Probar todas las pruebas unitarias del proyecto:
+# Probar Orquestador y Flujo Completo ASFI (Tarea 9):
+python3 -m unittest tests/test_tarea9_orchestrator.py
+
+# Probar la suite completa de unit tests:
 python3 -m unittest discover tests
 ```
+
 
