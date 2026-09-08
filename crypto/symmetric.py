@@ -22,9 +22,10 @@ class DESCipher:
     def encrypt(self, text: str) -> str:
         data = str(text).encode('utf-8')
         if HAS_PYCRYPTODOME:
-            cipher = DES.new(self.key, DES.MODE_ECB)
+            iv = os.urandom(DES.block_size)
+            cipher = DES.new(self.key, DES.MODE_CBC, iv=iv)
             padded = pad(data, DES.block_size)
-            return base64.b64encode(cipher.encrypt(padded)).decode('utf-8')
+            return base64.b64encode(iv + cipher.encrypt(padded)).decode('utf-8')
         else:
             # Fallback byte transformation
             return base64.b64encode(bytes([b ^ self.key[i % len(self.key)] for i, b in enumerate(data)])).decode('utf-8')
@@ -32,8 +33,9 @@ class DESCipher:
     def decrypt(self, text: str) -> str:
         raw = base64.b64decode(text)
         if HAS_PYCRYPTODOME:
-            cipher = DES.new(self.key, DES.MODE_ECB)
-            return unpad(cipher.decrypt(raw), DES.block_size).decode('utf-8')
+            iv, ciphertext = raw[:DES.block_size], raw[DES.block_size:]
+            cipher = DES.new(self.key, DES.MODE_CBC, iv=iv)
+            return unpad(cipher.decrypt(ciphertext), DES.block_size).decode('utf-8')
         else:
             return bytes([b ^ self.key[i % len(self.key)] for i, b in enumerate(raw)]).decode('utf-8')
 
@@ -45,17 +47,19 @@ class TripleDESCipher:
     def encrypt(self, text: str) -> str:
         data = str(text).encode('utf-8')
         if HAS_PYCRYPTODOME:
-            cipher = DES3.new(self.key, DES3.MODE_ECB)
+            iv = os.urandom(DES3.block_size)
+            cipher = DES3.new(self.key, DES3.MODE_CBC, iv=iv)
             padded = pad(data, DES3.block_size)
-            return base64.b64encode(cipher.encrypt(padded)).decode('utf-8')
+            return base64.b64encode(iv + cipher.encrypt(padded)).decode('utf-8')
         else:
             return base64.b64encode(bytes([b ^ self.key[i % len(self.key)] for i, b in enumerate(data)])).decode('utf-8')
 
     def decrypt(self, text: str) -> str:
         raw = base64.b64decode(text)
         if HAS_PYCRYPTODOME:
-            cipher = DES3.new(self.key, DES3.MODE_ECB)
-            return unpad(cipher.decrypt(raw), DES3.block_size).decode('utf-8')
+            iv, ciphertext = raw[:DES3.block_size], raw[DES3.block_size:]
+            cipher = DES3.new(self.key, DES3.MODE_CBC, iv=iv)
+            return unpad(cipher.decrypt(ciphertext), DES3.block_size).decode('utf-8')
         else:
             return bytes([b ^ self.key[i % len(self.key)] for i, b in enumerate(raw)]).decode('utf-8')
 
@@ -67,23 +71,25 @@ class BlowfishCipher:
     def encrypt(self, text: str) -> str:
         data = str(text).encode('utf-8')
         if HAS_PYCRYPTODOME:
-            cipher = Blowfish.new(self.key, Blowfish.MODE_ECB)
+            iv = os.urandom(Blowfish.block_size)
+            cipher = Blowfish.new(self.key, Blowfish.MODE_CBC, iv=iv)
             padded = pad(data, Blowfish.block_size)
-            return base64.b64encode(cipher.encrypt(padded)).decode('utf-8')
+            return base64.b64encode(iv + cipher.encrypt(padded)).decode('utf-8')
         else:
             return base64.b64encode(bytes([b ^ self.key[i % len(self.key)] for i, b in enumerate(data)])).decode('utf-8')
 
     def decrypt(self, text: str) -> str:
         raw = base64.b64decode(text)
         if HAS_PYCRYPTODOME:
-            cipher = Blowfish.new(self.key, Blowfish.MODE_ECB)
-            return unpad(cipher.decrypt(raw), Blowfish.block_size).decode('utf-8')
+            iv, ciphertext = raw[:Blowfish.block_size], raw[Blowfish.block_size:]
+            cipher = Blowfish.new(self.key, Blowfish.MODE_CBC, iv=iv)
+            return unpad(cipher.decrypt(ciphertext), Blowfish.block_size).decode('utf-8')
         else:
             return bytes([b ^ self.key[i % len(self.key)] for i, b in enumerate(raw)]).decode('utf-8')
 
 
 class TwofishCipher:
-    """128-bit block cipher implementation (Twofish specification / Feistel cipher structure)."""
+    """Educational reversible adapter used when a Twofish provider is unavailable."""
     def __init__(self, key: bytes = b"TwofishSecretKey16"):
         self.key = key[:16].ljust(16, b'0')
 
@@ -112,17 +118,19 @@ class AESCipher:
     def encrypt(self, text: str) -> str:
         data = str(text).encode('utf-8')
         if HAS_PYCRYPTODOME:
-            cipher = AES.new(self.key, AES.MODE_ECB)
+            iv = os.urandom(AES.block_size)
+            cipher = AES.new(self.key, AES.MODE_CBC, iv=iv)
             padded = pad(data, AES.block_size)
-            return base64.b64encode(cipher.encrypt(padded)).decode('utf-8')
+            return base64.b64encode(iv + cipher.encrypt(padded)).decode('utf-8')
         else:
             return base64.b64encode(bytes([b ^ self.key[i % len(self.key)] for i, b in enumerate(data)])).decode('utf-8')
 
     def decrypt(self, text: str) -> str:
         raw = base64.b64decode(text)
         if HAS_PYCRYPTODOME:
-            cipher = AES.new(self.key, AES.MODE_ECB)
-            return unpad(cipher.decrypt(raw), AES.block_size).decode('utf-8')
+            iv, ciphertext = raw[:AES.block_size], raw[AES.block_size:]
+            cipher = AES.new(self.key, AES.MODE_CBC, iv=iv)
+            return unpad(cipher.decrypt(ciphertext), AES.block_size).decode('utf-8')
         else:
             return bytes([b ^ self.key[i % len(self.key)] for i, b in enumerate(raw)]).decode('utf-8')
 
@@ -134,17 +142,17 @@ class ChaCha20Cipher:
     def encrypt(self, text: str) -> str:
         data = str(text).encode('utf-8')
         if HAS_PYCRYPTODOME:
-            nonce = b'0123456789ab' # 12 bytes fixed nonce for demo consistency
+            nonce = os.urandom(12)
             cipher = ChaCha20.new(key=self.key, nonce=nonce)
-            return base64.b64encode(cipher.encrypt(data)).decode('utf-8')
+            return base64.b64encode(nonce + cipher.encrypt(data)).decode('utf-8')
         else:
             return base64.b64encode(bytes([b ^ self.key[i % len(self.key)] for i, b in enumerate(data)])).decode('utf-8')
 
     def decrypt(self, text: str) -> str:
         raw = base64.b64decode(text)
         if HAS_PYCRYPTODOME:
-            nonce = b'0123456789ab'
+            nonce, ciphertext = raw[:12], raw[12:]
             cipher = ChaCha20.new(key=self.key, nonce=nonce)
-            return cipher.decrypt(raw).decode('utf-8')
+            return cipher.decrypt(ciphertext).decode('utf-8')
         else:
             return bytes([b ^ self.key[i % len(self.key)] for i, b in enumerate(raw)]).decode('utf-8')

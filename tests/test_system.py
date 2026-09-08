@@ -6,6 +6,7 @@ import unittest
 import asyncio
 import os
 import sys
+import tempfile
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -16,6 +17,7 @@ from crypto import (
 )
 from bcb_service.rate_engine import bcb_engine
 from databases.seed_data import encrypt_balance, decrypt_balance
+from databases.bank_dbs import BankDatabaseManager
 from asfi_central.sweeper import sweeper
 
 class TestCryptoSuite(unittest.TestCase):
@@ -25,6 +27,18 @@ class TestCryptoSuite(unittest.TestCase):
             enc = encrypt_balance(bank_id, sample_balance)
             dec = decrypt_balance(bank_id, enc)
             self.assertAlmostEqual(dec, sample_balance, places=1, msg=f"Error en cifrado Banco {bank_id}")
+
+    def test_randomized_ciphertexts(self):
+        sample = "1250.50"
+        randomized_ciphers = [
+            DESCipher(), TripleDESCipher(), BlowfishCipher(), AESCipher(),
+            ChaCha20Cipher(), RSACipher(), ElGamalCipher(), ECCCipher()
+        ]
+        for cipher in randomized_ciphers:
+            self.assertNotEqual(
+                cipher.encrypt(sample), cipher.encrypt(sample),
+                msg=f"El cifrado {type(cipher).__name__} reutiliza su aleatoriedad"
+            )
 
 class TestBCBEngine(unittest.TestCase):
     def test_rate_precision_and_limits(self):
@@ -41,6 +55,35 @@ class TestParallelSweep(unittest.TestCase):
             return await sweeper.execute_parallel_sweep()
         res = asyncio.run(run_sweep())
         self.assertGreater(res["total_processed"], 0)
+
+
+class TestBankDatabases6To14(unittest.TestCase):
+    def test_crud_and_persistence_for_assigned_banks(self):
+        with tempfile.TemporaryDirectory() as data_dir:
+            manager = BankDatabaseManager(data_dir=data_dir)
+
+            for bank_id in range(6, 15):
+                account_id = bank_id * 100000 + 1
+                manager.insert_encrypted_account(
+                    bank_id, account_id, f"Cliente {bank_id}", encrypt_balance(bank_id, 100.0)
+                )
+                accounts = manager.get_encrypted_accounts(bank_id)
+                self.assertEqual(len(accounts), 1)
+                self.assertEqual(accounts[0]["cuenta_id"], account_id)
+
+                self.assertTrue(manager.update_verification_code(
+                    bank_id, account_id, 696.0, "A1B2C3D4", "2026-09-06 12:00:00"
+                ))
+                updated = manager.get_encrypted_accounts(bank_id)[0]
+                self.assertEqual(updated["saldo_bs"], 696.0)
+                self.assertEqual(updated["codigo_verificacion"], "A1B2C3D4")
+                self.assertFalse(manager.update_verification_code(
+                    bank_id, account_id + 999, 1.0, "00000000", "2026-09-06 12:00:00"
+                ))
+
+            reloaded = BankDatabaseManager(data_dir=data_dir)
+            for bank_id in range(6, 15):
+                self.assertEqual(len(reloaded.get_encrypted_accounts(bank_id)), 1)
 
 if __name__ == "__main__":
     unittest.main()
