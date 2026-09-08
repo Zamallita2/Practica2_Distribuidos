@@ -6,6 +6,7 @@ Supports encryption of account balance payload and decryption.
 
 import base64
 import json
+import secrets
 
 try:
     from Crypto.PublicKey import RSA
@@ -13,6 +14,15 @@ try:
     HAS_RSA = True
 except ImportError:
     HAS_RSA = False
+
+try:
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    HAS_ECC = True
+except ImportError:
+    HAS_ECC = False
 
 
 class RSACipher:
@@ -59,7 +69,7 @@ class ElGamalCipher:
     def encrypt(self, text: str) -> str:
         # Encrypt byte array into pairs (c1, c2)
         data = str(text).encode('utf-8')
-        k = 4321 # Ephemeral key
+        k = secrets.randbelow(self.p - 2) + 1
         c1 = pow(self.g, k, self.p)
         s = pow(self.h, k, self.p)
         
@@ -84,23 +94,40 @@ class ElGamalCipher:
 
 
 class ECCCipher:
-    """Elliptic Curve Cryptography (ECC / ECIES simulation)"""
+    """ECC encryption using an ECIES-style ECDH, HKDF and AES-GCM envelope."""
     def __init__(self):
-        # Secp256k1 lightweight curve simulation parameters
-        self.p = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F
-        self.a = 0
-        self.b = 7
-        self.private_key = 0xA1B2C3D4E5F6
+        if HAS_ECC:
+            self.private_key = ec.generate_private_key(ec.SECP256R1())
+            self.public_key = self.private_key.public_key()
+        else:
+            self.private_key = 0xA1B2C3D4E5F6
         
     def encrypt(self, text: str) -> str:
-        # ECC Ephemeral Key Exchange Masking
         data = str(text).encode('utf-8')
-        mask = (self.private_key * 13) % 256
-        encrypted = bytearray([b ^ mask for b in data])
-        return base64.b64encode(encrypted).decode('utf-8')
+        if not HAS_ECC:
+            mask = (self.private_key * 13) % 256
+            return base64.b64encode(bytes([b ^ mask for b in data])).decode('utf-8')
+
+        ephemeral_key = ec.generate_private_key(ec.SECP256R1())
+        shared_secret = ephemeral_key.exchange(ec.ECDH(), self.public_key)
+        aes_key = HKDF(algorithm=hashes.SHA256(), length=32, salt=None, info=b'ASFI-ECC').derive(shared_secret)
+        nonce = secrets.token_bytes(12)
+        ciphertext = AESGCM(aes_key).encrypt(nonce, data, None)
+        ephemeral_public = ephemeral_key.public_key().public_bytes(
+            serialization.Encoding.X962,
+            serialization.PublicFormat.CompressedPoint
+        )
+        return base64.b64encode(ephemeral_public + nonce + ciphertext).decode('utf-8')
 
     def decrypt(self, text: str) -> str:
         raw = base64.b64decode(text)
-        mask = (self.private_key * 13) % 256
-        decrypted = bytearray([b ^ mask for b in raw])
-        return decrypted.decode('utf-8')
+        if not HAS_ECC:
+            mask = (self.private_key * 13) % 256
+            return bytes([b ^ mask for b in raw]).decode('utf-8')
+
+        ephemeral_public = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), raw[:33])
+        nonce = raw[33:45]
+        ciphertext = raw[45:]
+        shared_secret = self.private_key.exchange(ec.ECDH(), ephemeral_public)
+        aes_key = HKDF(algorithm=hashes.SHA256(), length=32, salt=None, info=b'ASFI-ECC').derive(shared_secret)
+        return AESGCM(aes_key).decrypt(nonce, ciphertext, None).decode('utf-8')

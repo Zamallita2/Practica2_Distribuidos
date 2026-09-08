@@ -69,7 +69,7 @@ def seed_bank_databases_from_csv(csv_path: str = "01 - Practica 2 Dataset.csv", 
         conn.commit()
         conn.close()
 
-    bank_db_manager._init_bank_stores()
+    bank_db_manager._init_bank_stores(reset=True)
 
     if not os.path.exists(csv_path):
         from scripts.generate_sample_excel import generate_sample_excel
