@@ -44,13 +44,36 @@ Este módulo implementa la arquitectura de base de datos relacional centralizada
 - **Motor de Barrido Paralelo**: [asfi_central/sweeper.py](asfi_central/sweeper.py)
 - **Motor de Procesamiento & Auditoría**: [asfi_central/process_engine.py](asfi_central/process_engine.py)
 - **Pruebas Unitarias Tarea 7**: [tests/test_tarea7_asfi_db.py](tests/test_tarea7_asfi_db.py)
+- **Pruebas Unitarias Tarea 8**: [tests/test_tarea8_sweeper.py](tests/test_tarea8_sweeper.py)
 
 ---
 
-## 🚀 Ejecución de Pruebas Tarea 7
+## ⚡ Tarea 8: Motor de Barrido Paralelo Asíncrono
 
-Para validar el funcionamiento aislado del módulo de la Base de Datos Central ASFI:
+Este módulo implementa el motor de extracción concurrente y asíncrona de saldos cifrados desde las 14 entidades financieras.
+
+### 📋 Requerimientos Cumplidos
+
+1. **Conexión a los 14 Bancos**: Extracción paralela vía API HTTP (asíncrona) o capa directa de base de datos (`asyncio`).
+2. **Consultas Simultáneas**: Uso de `asyncio.gather(*tasks, return_exceptions=True)` para ejecutar las 14 llamadas concurrentes.
+3. **Instante de Referencia $t_0$**: Captura y fijación del tipo de cambio BCB al momento $t_0$ antes de iniciar el lote, garantizando que el 100% de las transacciones del barrido se procesen bajo la misma cotización sin sesgos.
+4. **Gestión de Errores y Resiliencia**: Captura individual de excepciones, fallos de red o errores HTTP por banco sin detener la ejecución del barrido.
+5. **Consolidación**: Generación de un reporte resumido (`successful_banks`, `failed_banks`, `total_processed`, `elapsed_seconds`, `t0_timestamp`).
+
+---
+
+## 🚀 Ejecución de Pruebas Tarea 7 y Tarea 8
+
+Para validar el funcionamiento de los módulos del Integrante 3:
 
 ```bash
+# Probar Base de Datos Central ASFI (Tarea 7):
 python3 -m unittest tests/test_tarea7_asfi_db.py
+
+# Probar Motor de Barrido Paralelo (Tarea 8):
+python3 -m unittest tests/test_tarea8_sweeper.py
+
+# Probar todas las pruebas unitarias del proyecto:
+python3 -m unittest discover tests
 ```
+

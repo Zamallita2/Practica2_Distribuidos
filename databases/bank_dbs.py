@@ -58,9 +58,10 @@ class BankDatabaseManager:
         }
         self._init_bank_stores()
 
-    def _init_bank_stores(self):
-        for b_id, adapter in self.banks_1_5.items():
-            adapter.create_schema()
+    def _init_bank_stores(self, reset: bool = False):
+        if reset:
+            for b_id, adapter in self.banks_1_5.items():
+                adapter.create_schema()
 
         for b in BANKS:
             b_id = b["id"]
@@ -70,8 +71,9 @@ class BankDatabaseManager:
                 self.graph_dbs[b_id] = nx.DiGraph() if HAS_NETWORKX else SimpleGraph()
             elif "MongoDB" in b["db_engine"] or "JSON" in b["db_engine"]:
                 json_path = os.path.join(self.data_dir, f"bank_{b_id}_nosql.json")
-                with open(json_path, "w") as f:
-                    json.dump([], f)
+                if reset or not os.path.exists(json_path):
+                    with open(json_path, "w") as f:
+                        json.dump([], f)
             else:
                 db_file = os.path.join(self.data_dir, f"bank_{b_id}.db")
                 conn = sqlite3.connect(db_file)
@@ -86,7 +88,8 @@ class BankDatabaseManager:
                         FechaConversion TEXT DEFAULT ''
                     )
                 """)
-                cursor.execute("DELETE FROM CuentasBancarias")
+                if reset:
+                    cursor.execute("DELETE FROM CuentasBancarias")
                 conn.commit()
                 conn.close()
 
@@ -212,11 +215,15 @@ class BankDatabaseManager:
             if os.path.exists(json_path):
                 with open(json_path, "r") as f:
                     data = json.load(f)
+                found = False
                 for item in data:
                     if item["cuenta_id"] == cuenta_id:
                         item["saldo_bs"] = saldo_bs
                         item["codigo_verificacion"] = verification_code
                         item["fecha_conversion"] = timestamp
+                        found = True
+                if not found:
+                    return False
                 with open(json_path, "w") as f:
                     json.dump(data, f, indent=2)
                 return True
@@ -231,8 +238,9 @@ class BankDatabaseManager:
                 SET SaldoBs = ?, CodigoVerificacion = ?, FechaConversion = ?
                 WHERE CuentaId = ?
             """, (saldo_bs, verification_code, timestamp, cuenta_id))
+            updated = cursor.rowcount > 0
             conn.commit()
             conn.close()
-            return True
+            return updated
 
 bank_db_manager = BankDatabaseManager()
