@@ -7,3 +7,8 @@ pycryptodome>=3.18.0
 cryptography>=41.0.0
 pydantic>=2.0.0
 networkx>=3.0
+
+# Motores de bases de datos reales - Bancos 1-5 (Tarea 2)
+PyMySQL>=1.1.0
+psycopg2-binary>=2.9.9
+pymongo>=4.6.0
