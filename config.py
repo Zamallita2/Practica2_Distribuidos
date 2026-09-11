@@ -7,7 +7,7 @@ ASFI_PORT = 8200
 
 # Configuración del Banco Central de Bolivia (BCB)
 BCB_BASE_EXCHANGE_RATE = 6.9600  # Tipo de cambio base USD -> BOB
-BCB_UPDATE_INTERVAL_SECONDS = 180 # Fluctuación cada 3 minutos (180s), ejecuciones breves ajustables
+BCB_UPDATE_INTERVAL_SECONDS = 3  # Fluctuación cada 3s para que se note en el dashboard
 BCB_MAX_VARIATION = 0.9999
 
 # Configuración ASFI

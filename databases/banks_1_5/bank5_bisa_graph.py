@@ -18,35 +18,81 @@ en databases/schema/bank5_bisa_graph.cypher.
 
 import os
 import json
-import networkx as nx
-from networkx.readwrite import json_graph
+
+try:
+    import networkx as nx
+    from networkx.readwrite import json_graph
+    HAS_NETWORKX = True
+
+except ImportError:
+    HAS_NETWORKX = False
+    class SimpleGraph:
+        def __init__(self):
+            self.nodes_data = {}
+            self.edges = []
+        def add_node(self, node_id, **kwargs):
+            self.nodes_data[node_id] = kwargs
+        def add_edge(self, u, v, **kwargs):
+            self.edges.append((u, v, kwargs))
+        def has_edge(self, u, v):
+            return any(x[0] == u and x[1] == v for x in self.edges)
+        def get_edge_data(self, u, v):
+            for edge_u, edge_v, data in self.edges:
+                if edge_u == u and edge_v == v:
+                    return data
+            return None
+        @property
+        def nodes(self):
+            return self.nodes_data
+        def __contains__(self, item):
+            return item in self.nodes_data
+
 
 
 class BankBISAGraphAdapter:
-    """Adaptador de grafo (NetworkX, persistido en JSON) para el Banco BISA S.A."""
+    """Adaptador de grafo (NetworkX / SimpleGraph fallback, persistido en JSON) para el Banco BISA S.A."""
 
-    engine_mode = "real"  # NetworkX es un motor de grafo real embebido.
+    engine_mode = "real"
 
     def __init__(self, data_dir: str = "bank_data"):
         os.makedirs(data_dir, exist_ok=True)
         self.graph_path = os.path.join(data_dir, "bank5_bisa_graph.json")
-        self.graph = nx.DiGraph()
+        self.graph = nx.DiGraph() if HAS_NETWORKX else SimpleGraph()
         self.create_schema()
 
     def create_schema(self):
-        self.graph = nx.DiGraph()
+        self.graph = nx.DiGraph() if HAS_NETWORKX else SimpleGraph()
         self._persist()
 
     def _persist(self):
-        data = json_graph.node_link_data(self.graph, edges="edges")
+        if HAS_NETWORKX:
+            data = json_graph.node_link_data(self.graph, edges="edges")
+        else:
+            data = {
+                "nodes": [{"id": k, **v} for k, v in self.graph.nodes_data.items()],
+                "edges": [{"source": u, "target": v, **w} for u, v, w in self.graph.edges]
+            }
         with open(self.graph_path, "w") as f:
             json.dump(data, f, indent=2)
 
     def _load(self):
         if os.path.exists(self.graph_path):
-            with open(self.graph_path, "r") as f:
-                data = json.load(f)
-            self.graph = json_graph.node_link_graph(data, directed=True, edges="edges")
+            try:
+                with open(self.graph_path, "r") as f:
+                    data = json.load(f)
+                if HAS_NETWORKX:
+                    self.graph = json_graph.node_link_graph(data, directed=True, edges="edges")
+                else:
+                    g = SimpleGraph()
+                    for n in data.get("nodes", []):
+                        n_id = n.pop("id", "")
+                        g.add_node(n_id, **n)
+                    for e in data.get("edges", []):
+                        u, v = e.pop("source", ""), e.pop("target", "")
+                        g.add_edge(u, v, **e)
+                    self.graph = g
+            except (json.JSONDecodeError, ValueError):
+                pass
 
     def insert_encrypted_account(self, cuenta_id: int, cliente_nombre: str, saldo_cifrado: str):
         self._load()
@@ -69,7 +115,8 @@ class BankBISAGraphAdapter:
     def get_encrypted_accounts(self):
         self._load()
         accounts = []
-        for _, data in self.graph.nodes(data=True):
+        nodes_iter = self.graph.nodes(data=True) if HAS_NETWORKX else self.graph.nodes_data.items()
+        for _, data in nodes_iter:
             if data.get("tipo") == "Cuenta":
                 accounts.append({
                     "cuenta_id": data["cuenta_id"],
@@ -84,11 +131,13 @@ class BankBISAGraphAdapter:
         account_node = f"Cuenta_{cuenta_id}"
         if account_node not in self.graph:
             return False
-        self.graph.nodes[account_node]["saldo_bs"] = saldo_bs
-        self.graph.nodes[account_node]["codigo_verificacion"] = verification_code
-        self.graph.nodes[account_node]["fecha_conversion"] = timestamp
+        node_dict = self.graph.nodes[account_node] if HAS_NETWORKX else self.graph.nodes_data[account_node]
+        node_dict["saldo_bs"] = saldo_bs
+        node_dict["codigo_verificacion"] = verification_code
+        node_dict["fecha_conversion"] = timestamp
         self._persist()
         return True
+
 
 
 if __name__ == "__main__":

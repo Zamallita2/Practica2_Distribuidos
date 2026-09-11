@@ -28,6 +28,13 @@ except ImportError:
             self.nodes_data[node_id] = kwargs
         def add_edge(self, u, v, **kwargs):
             self.edges.append((u, v, kwargs))
+        def has_edge(self, u, v):
+            return any(x[0] == u and x[1] == v for x in self.edges)
+        def get_edge_data(self, u, v):
+            for edge_u, edge_v, data in self.edges:
+                if edge_u == u and edge_v == v:
+                    return data
+            return None
         def nodes(self, data=False):
             if data:
                 return self.nodes_data.items()
@@ -170,8 +177,11 @@ class BankDatabaseManager:
         elif "MongoDB" in b_info["db_engine"] or "JSON" in b_info["db_engine"]:
             json_path = os.path.join(self.data_dir, f"bank_{bank_id}_nosql.json")
             if os.path.exists(json_path):
-                with open(json_path, "r") as f:
-                    return json.load(f)
+                try:
+                    with open(json_path, "r") as f:
+                        return json.load(f)
+                except (json.JSONDecodeError, ValueError):
+                    return []
             return []
 
         else:
@@ -213,8 +223,11 @@ class BankDatabaseManager:
         elif "MongoDB" in b_info["db_engine"] or "JSON" in b_info["db_engine"]:
             json_path = os.path.join(self.data_dir, f"bank_{bank_id}_nosql.json")
             if os.path.exists(json_path):
-                with open(json_path, "r") as f:
-                    data = json.load(f)
+                try:
+                    with open(json_path, "r") as f:
+                        data = json.load(f)
+                except (json.JSONDecodeError, ValueError):
+                    data = []
                 found = False
                 for item in data:
                     if item["cuenta_id"] == cuenta_id:

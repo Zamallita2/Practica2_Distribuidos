@@ -18,7 +18,8 @@ services:
       POSTGRES_PASSWORD: postgres123
       POSTGRES_DB: banco_bnb
     ports:
-      - "5432:5432"
+      # 5433 en el host para no chocar con PostgreSQL local del sistema (5432)
+      - "5433:5432"
 
   mongodb:
     image: mongo:7

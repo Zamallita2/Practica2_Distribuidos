@@ -1,0 +1,1198 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plataforma Distribuida ASFI - Conversión Monetaria & Auditoría</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0b0f19;
+      --bg-card: rgba(23, 31, 51, 0.7);
+      --bg-card-hover: rgba(30, 41, 69, 0.85);
+      --accent-blue: #38bdf8;
+      --accent-indigo: #6366f1;
+      --accent-purple: #a855f7;
+      --accent-emerald: #10b981;
+      --accent-amber: #f59e0b;
+      --accent-rose: #f43f5e;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --border-color: rgba(255, 255, 255, 0.1);
+      --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: radial-gradient(circle at top right, #1e1b4b 0%, #0f172a 50%, #0b0f19 100%);
+      color: var(--text-main);
+      min-height: 100vh;
+      padding-bottom: 40px;
+    }
+
+    header {
+      background: rgba(15, 23, 42, 0.8);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-color);
+      padding: 18px 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-icon {
+      font-size: 28px;
+      background: linear-gradient(135deg, var(--accent-blue), var(--accent-indigo));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand h1 {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    .brand span {
+      font-size: 12px;
+      color: var(--accent-blue);
+      font-weight: 500;
+      background: rgba(56, 189, 248, 0.1);
+      padding: 2px 8px;
+      border-radius: 12px;
+      border: 1px solid rgba(56, 189, 248, 0.2);
+    }
+
+    .nav-tabs {
+      display: flex;
+      gap: 8px;
+      background: rgba(15, 23, 42, 0.6);
+      padding: 4px;
+      border-radius: 10px;
+      border: 1px solid var(--border-color);
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 8px 16px;
+      font-size: 13px;
+      font-weight: 500;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .tab-btn:hover { color: var(--text-main); }
+    .tab-btn.active {
+      background: linear-gradient(135deg, var(--accent-indigo), #4f46e5);
+      color: white;
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+    }
+
+    main {
+      max-width: 1400px;
+      margin: 28px auto;
+      padding: 0 24px;
+    }
+
+    .tab-content { display: none; }
+    .tab-content.active { display: block; animation: fadeIn 0.3s ease; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Grid layouts */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 1fr 2fr;
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+
+    .card {
+      background: var(--bg-card);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: var(--glass-shadow);
+      transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+
+    .card:hover {
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .card-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .card-title i { font-size: 18px; color: var(--accent-blue); }
+
+    /* BCB Widget */
+    .bcb-rate-display {
+      text-align: center;
+      padding: 20px 0;
+    }
+
+    .rate-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 42px;
+      font-weight: 800;
+      color: #34d399;
+      margin: 8px 0;
+      transition: color 0.25s ease, transform 0.25s ease;
+    }
+    .rate-value.flash-up { color: #4ade80; transform: scale(1.06); }
+    .rate-value.flash-down { color: #fb7185; transform: scale(1.06); }
+
+    .rate-subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .countdown-bar {
+      height: 6px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-top: 16px;
+    }
+
+    .countdown-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent-blue), var(--accent-emerald));
+      width: 100%;
+      transition: width 1s linear;
+    }
+
+    .interval-controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .btn-sm {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-sm:hover, .btn-sm.active {
+      background: var(--accent-indigo);
+      border-color: var(--accent-indigo);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent-indigo), #4f46e5);
+      color: white;
+      border: none;
+      padding: 14px 28px;
+      font-size: 15px;
+      font-weight: 600;
+      border-radius: 12px;
+      cursor: pointer;
+      width: 100%;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(99, 102, 241, 0.6);
+    }
+
+    /* Bank Cards Grid */
+    .banks-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 20px;
+    }
+
+    .bank-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 18px;
+      transition: all 0.2s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .bank-card:hover {
+      background: var(--bg-card-hover);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .bank-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 12px;
+    }
+
+    .bank-badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 6px;
+      text-transform: uppercase;
+    }
+
+    .badge-relational { background: rgba(56, 189, 248, 0.15); color: var(--accent-blue); border: 1px solid rgba(56, 189, 248, 0.3); }
+    .badge-nosql { background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); border: 1px solid rgba(245, 158, 11, 0.3); }
+    .badge-graph { background: rgba(168, 85, 247, 0.15); color: var(--accent-purple); border: 1px solid rgba(168, 85, 247, 0.3); }
+
+    .query-box {
+      background: rgba(10, 15, 26, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: #a5f3fc;
+      margin-top: 12px;
+      white-space: pre-wrap;
+      max-height: 120px;
+      overflow-y: auto;
+    }
+
+    .query-label {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    /* Tables */
+    .table-container {
+      overflow-x: auto;
+      margin-top: 16px;
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      text-align: left;
+    }
+
+    th {
+      background: rgba(15, 23, 42, 0.9);
+      color: var(--text-muted);
+      font-weight: 600;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    td {
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .mono { font-family: 'JetBrains Mono', monospace; }
+    .hex-code {
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--accent-emerald);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 700;
+    }
+
+    .stat-box {
+      background: rgba(15, 23, 42, 0.5);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .stat-number {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--accent-blue);
+      margin-top: 4px;
+    }
+
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    /* Search bar */
+    .search-input {
+      width: 100%;
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
+
+    .search-input:focus {
+      outline: none;
+      border-color: var(--accent-indigo);
+    }
+
+    /* Modal */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(6px);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal.open { display: flex; }
+
+    .modal-content {
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      width: 90%;
+      max-width: 900px;
+      max-height: 85vh;
+      overflow-y: auto;
+      padding: 24px;
+      box-shadow: var(--glass-shadow);
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <div class="brand-icon">🏛️</div>
+      <div>
+        <h1>ASFI Distribuido</h1>
+        <p style="font-size: 11px; color: var(--text-muted);">Conversión Monetaria BCB & Auditoría Central</p>
+      </div>
+      <span>Rama: Zama</span>
+    </div>
+
+    <nav class="nav-tabs">
+      <button class="tab-btn active" onclick="switchTab('tab-control')">⚡ Control & BCB</button>
+      <button class="tab-btn" onclick="switchTab('tab-banks')">🏦 14 Bancos & SQL</button>
+      <button class="tab-btn" onclick="switchTab('tab-validation')">🛡️ Ingesta & Validaciones</button>
+      <button class="tab-btn" onclick="switchTab('tab-audit')">📜 Audit Logs</button>
+      <button class="tab-btn" onclick="switchTab('tab-cpu')">🧠 CPU / Núcleos</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- TAB 1: CONTROL CENTRAL & BCB -->
+    <div id="tab-control" class="tab-content active">
+      <div class="stats-row">
+        <div class="stat-box">
+          <div class="card-title">Bancos Conectados</div>
+          <div class="stat-number" id="stat-banks">14 / 14</div>
+        </div>
+        <div class="stat-box">
+          <div class="card-title">Cuentas Procesadas</div>
+          <div class="stat-number" id="stat-accounts" style="color: var(--accent-indigo);">1,244</div>
+        </div>
+        <div class="stat-box">
+          <div class="card-title">Consistencia ASFI</div>
+          <div class="stat-number" style="color: var(--accent-emerald);">100%</div>
+        </div>
+        <div class="stat-box">
+          <div class="card-title">Tipo de Cambio Activo</div>
+          <div class="stat-number" id="stat-rate-small" style="color: var(--accent-amber);">7.2388</div>
+        </div>
+      </div>
+
+      <div class="dashboard-grid">
+        <!-- Cotizador BCB -->
+        <div class="card">
+          <div class="card-title">
+            <span>🏛️ Banco Central de Bolivia (BCB)</span>
+            <i id="bcb-spin">🔄</i>
+          </div>
+
+          <div class="bcb-rate-display">
+            <div class="rate-subtitle">Tasa de Cambio Oficial (USD → BOB)</div>
+            <div class="rate-value" id="bcb-rate-value">-- BOB</div>
+            <div id="bcb-delta" style="font-size: 14px; font-weight: 600; margin-top: 4px; min-height: 20px;">—</div>
+            <div class="rate-subtitle" id="bcb-time-info">Actualizado: --:--:--</div>
+          </div>
+
+          <canvas id="bcb-sparkline" width="480" height="56" style="width: 100%; height: 56px; margin: 8px 0 12px; background: rgba(0,0,0,0.2); border-radius: 8px;"></canvas>
+
+          <div class="countdown-bar">
+            <div class="countdown-fill" id="bcb-progress"></div>
+          </div>
+          <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;" id="bcb-countdown-label">Próxima fluctuación en --s</div>
+
+          <div class="interval-controls">
+            <span style="font-size: 12px; color: var(--text-muted);">Intervalo Fluctuación:</span>
+            <button class="btn-sm active" onclick="setBcbInterval(3)">3s</button>
+            <button class="btn-sm" onclick="setBcbInterval(5)">5s</button>
+            <button class="btn-sm" onclick="setBcbInterval(10)">10s</button>
+            <button class="btn-sm" onclick="forceBcbTick()" title="Forzar cambio ahora">⚡ Ahora</button>
+          </div>
+        </div>
+
+        <!-- Ejecutor de Barrido Paralelo -->
+        <div class="card">
+          <div class="card-title">
+            <span>🚀 Barrido Paralelo ASFI (14 Bancos Simultáneos)</span>
+            <span>t₀ Instante de Referencia</span>
+          </div>
+
+          <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px; line-height: 1.5;">
+            Ejecuta la extracción asíncrona concurrente a las 14 entidades bancarias. Descifra saldos USD, convierte a Bs con la tasa activa del BCB, genera el código verificador de 8 caracteres hexadecimales y actualiza en tiempo real las bases de datos de cada banco.
+          </p>
+
+          <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;">
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer;">
+              <input type="checkbox" id="chk-update-bank-db" checked>
+              <span><strong>Actualizar BD de los Bancos</strong> (Sincronizar SaldoBs y Código 8-Hex de vuelta en la BD del banco)</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer;">
+              <input type="checkbox" id="chk-reset-first">
+              <span><strong>Limpiar y recargar saldos originales en Dólares</strong> en los bancos antes de convertir</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer;">
+              <input type="checkbox" id="chk-dynamic-rate" checked>
+              <span>Activar Cotización Dinámica Mid-Sweep (Si la tasa fluctúa a mitad de cálculo, aplica la nueva inmediatamente)</span>
+            </label>
+          </div>
+
+          <button class="btn-primary" onclick="runParallelSweep()">
+            <span>⚡ Ejecutar Barrido Paralelo Completo</span>
+          </button>
+
+          <div id="sweep-output" style="margin-top: 20px; display: none;">
+            <div style="font-size: 12px; font-weight: 600; color: var(--accent-emerald); margin-bottom: 8px;" id="sweep-status-text">✅ Barrido completado con éxito</div>
+
+            <div id="sweep-perf-panel" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 14px;">
+            </div>
+            <div id="sweep-perf-detail" style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px; line-height: 1.55;"></div>
+
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Banco</th>
+                    <th>Estado Connection</th>
+                    <th>Cuentas</th>
+                    <th>Tiempo Extracción</th>
+                  </tr>
+                </thead>
+                <tbody id="sweep-summary-rows">
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: 14 BANCOS & SQL -->
+    <div id="tab-banks" class="tab-content">
+      <div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <h2>Entidades Financieras (14 Bancos)</h2>
+          <p style="font-size: 13px; color: var(--text-muted);">Arquitectura heterogénea: Relacional (SQLite, MySQL, PostgreSQL), NoSQL (MongoDB) y Grafo (Neo4j / NetworkX).</p>
+        </div>
+      </div>
+
+      <div class="banks-grid" id="banks-cards-container">
+        <!-- Renderizado dinámico desde JS -->
+      </div>
+    </div>
+
+    <!-- TAB 3: INGESTA & VALIDACIONES -->
+    <div id="tab-validation" class="tab-content">
+      <div class="card" style="margin-bottom: 24px;">
+        <div class="card-title">
+          <span>🛡️ Motor de Ingesta & Validaciones Estrictas de Datos</span>
+          <span class="badge-relational" style="font-size: 12px;">Dataset: 01 - Practica 2 Dataset.csv</span>
+        </div>
+
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px;">
+          Valida rigurosamente los datos antes de introducirlos a las bases de datos de los bancos. Filtra saldos negativos, texto no numérico en montos, números de cuenta corruptos e IDs de banco inválidos.
+        </p>
+
+        <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 20px;">
+          <span style="font-size: 13px; font-weight: 600;">Re-sembrar BDs con Porcentaje:</span>
+          <button class="btn-sm active" onclick="seedDataset(1.0)">1.0% (Muestra)</button>
+          <button class="btn-sm" onclick="seedDataset(2.0)">2.0%</button>
+          <button class="btn-sm" onclick="seedDataset(5.0)">5.0%</button>
+        </div>
+
+        <div class="stats-row" style="margin-bottom: 0;">
+          <div class="stat-box">
+            <div class="card-title">Filas Leídas CSV</div>
+            <div class="stat-number" id="val-total-read">--</div>
+          </div>
+          <div class="stat-box">
+            <div class="card-title">Cuentas Aceptadas</div>
+            <div class="stat-number" id="val-total-inserted" style="color: var(--accent-emerald);">--</div>
+          </div>
+          <div class="stat-box">
+            <div class="card-title">Registros Descartados</div>
+            <div class="stat-number" id="val-total-discarded" style="color: var(--accent-rose);">--</div>
+          </div>
+          <div class="stat-box">
+            <div class="card-title">Tasa de Descarte</div>
+            <div class="stat-number" id="val-discard-rate" style="color: var(--accent-amber);">0.0%</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <span>⚠️ Registros Descartados por Validación (Muestra de Auditoría)</span>
+        </div>
+
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>IdBanco</th>
+                <th>NroCuenta</th>
+                <th>Cliente</th>
+                <th>Saldo Leído</th>
+                <th>Razón del Rechazo</th>
+              </tr>
+            </thead>
+            <tbody id="discarded-rows-tbody">
+              <tr>
+                <td colspan="5" style="text-align: center; color: var(--text-muted);">Sin registros descartados recientes o ejecuta la ingesta.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 4: AUDIT LOGS -->
+    <div id="tab-audit" class="tab-content">
+      <div class="card">
+        <div class="card-title">
+          <span>📜 Registros de Auditoría ASFI (AuditLogs DB & asfi_audit.log)</span>
+          <span style="font-size: 12px; color: var(--text-muted);" id="audit-count-label">Cargando...</span>
+        </div>
+
+        <input type="text" class="search-input" id="audit-search" placeholder="🔍 Buscar por ID Cuenta, Banco, Código Hex o Tasa de cambio..." onkeyup="filterAuditLogs()">
+
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Log ID</th>
+                <th>Timestamp</th>
+                <th>Tasa BCB (BOB)</th>
+                <th>Cuenta ID</th>
+                <th>Banco ID</th>
+                <th>Código Verificador (8 Hex)</th>
+              </tr>
+            </thead>
+            <tbody id="audit-table-tbody">
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 5: CPU / NÚCLEOS -->
+    <div id="tab-cpu" class="tab-content">
+      <div class="card" style="margin-bottom: 20px;">
+        <div class="card-title">
+          <span>🧠 Rendimiento del Dispositivo (CPU por Núcleo)</span>
+          <span style="font-size: 12px; color: var(--text-muted);" id="cpu-live-label">En vivo</span>
+        </div>
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px; line-height: 1.5;">
+          Monitoreo en tiempo real del uso de cada núcleo. Durante un barrido paralelo deberías ver varios núcleos subir a la vez (prueba visual de multi-hilo / multi-core).
+        </p>
+        <div style="display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px;">
+          <div class="stat-box" style="flex: 1; min-width: 140px;">
+            <div class="card-title">Núcleos</div>
+            <div class="stat-number" id="cpu-core-count" style="color: var(--accent-blue);">—</div>
+          </div>
+          <div class="stat-box" style="flex: 1; min-width: 140px;">
+            <div class="card-title">Promedio CPU</div>
+            <div class="stat-number" id="cpu-avg" style="color: var(--accent-amber);">—%</div>
+          </div>
+          <div class="stat-box" style="flex: 1; min-width: 140px;">
+            <div class="card-title">Load Average</div>
+            <div class="stat-number" id="cpu-loadavg" style="color: var(--accent-emerald); font-size: 22px;">—</div>
+          </div>
+        </div>
+        <div id="cpu-cores-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px;"></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span>Histórico reciente (promedio)</span></div>
+        <canvas id="cpu-history-canvas" width="900" height="120" style="width: 100%; height: 120px; background: rgba(0,0,0,0.2); border-radius: 8px;"></canvas>
+      </div>
+    </div>
+  </main>
+
+  <!-- MODAL BANCARIO -->
+  <div class="modal" id="bank-modal">
+    <div class="modal-content">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h3 id="modal-bank-title">Inspección de Banco</h3>
+        <button class="btn-sm" onclick="closeBankModal()">✖ Cerrar</button>
+      </div>
+
+      <div id="modal-bank-body">
+        <!-- Renderizado dinámico -->
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let bcbInterval = 3;
+    let bcbTimer = null;
+    let auditLogsCache = [];
+    let banksDataCache = [];
+    let lastBcbRate = null;
+    let lastBcbPeriod = null;
+    let cpuPollTimer = null;
+    let cpuCoreCanvases = {};
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+      
+      event.currentTarget.classList.add('active');
+      document.getElementById(tabId).classList.add('active');
+
+      if (tabId === 'tab-banks') loadBanks();
+      if (tabId === 'tab-audit') loadAuditLogs();
+      if (tabId === 'tab-cpu') startCpuPolling();
+      else stopCpuPolling();
+    }
+
+    function drawSparkline(canvasId, values, color) {
+      const canvas = document.getElementById(canvasId);
+      if (!canvas || !values || !values.length) return;
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width, h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+      const pts = values.length === 1 ? [values[0], values[0]] : values;
+      const min = Math.min(...pts);
+      const max = Math.max(...pts);
+      const span = Math.max(0.0001, max - min);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      pts.forEach((v, i) => {
+        const x = (i / (pts.length - 1)) * (w - 8) + 4;
+        const y = h - 6 - ((v - min) / span) * (h - 12);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+    }
+
+    async function fetchBcbRate() {
+      try {
+        const res = await fetch('/api/bcb-rate?_=' + Date.now(), { cache: 'no-store' });
+        const data = await res.json();
+        if (data.interval) bcbInterval = data.interval;
+
+        const rate = Number(data.current_rate);
+        const valEl = document.getElementById('bcb-rate-value');
+        valEl.innerText = rate.toFixed(4) + ' BOB';
+        document.getElementById('stat-rate-small').innerText = rate.toFixed(4);
+
+        const tickerOk = data.ticker_alive === false ? ' · ⚠ ticker detenido' : '';
+        document.getElementById('bcb-time-info').innerText =
+          `Instante: ${data.timestamp} · Periodo #${data.period_index} · Intervalo ${data.interval}s${tickerOk}`;
+
+        const deltaEl = document.getElementById('bcb-delta');
+        const periodChanged = lastBcbPeriod !== null && data.period_index !== lastBcbPeriod;
+        const rateChanged = lastBcbRate !== null && lastBcbRate !== rate;
+
+        if (data.delta == null && !rateChanged) {
+          deltaEl.style.color = 'var(--text-muted)';
+          deltaEl.innerText = 'Cotización activa — esperando primera fluctuación del ticker…';
+        } else {
+          const d = data.delta != null ? data.delta : (rate - lastBcbRate);
+          const up = d >= 0;
+          deltaEl.style.color = up ? 'var(--accent-emerald)' : 'var(--accent-rose)';
+          deltaEl.innerText = `${up ? '▲' : '▼'} ${up ? '+' : ''}${Number(d).toFixed(4)} BOB  (ASFI usa este valor al convertir)`;
+        }
+
+        if (rateChanged || periodChanged) {
+          valEl.classList.remove('flash-up', 'flash-down');
+          void valEl.offsetWidth;
+          const up = data.delta == null ? rate >= lastBcbRate : data.delta >= 0;
+          valEl.classList.add(up ? 'flash-up' : 'flash-down');
+          setTimeout(() => valEl.classList.remove('flash-up', 'flash-down'), 600);
+          const spin = document.getElementById('bcb-spin');
+          if (spin) spin.style.transform = `rotate(${data.period_index * 40}deg)`;
+        }
+        lastBcbRate = rate;
+        lastBcbPeriod = data.period_index;
+
+        const remaining = data.seconds_until_next_change;
+        const frac = data.fraction_until_next_change != null ? data.fraction_until_next_change : (remaining / bcbInterval);
+        document.getElementById('bcb-progress').style.width = Math.min(100, Math.max(0, frac * 100)) + '%';
+        document.getElementById('bcb-countdown-label').innerText = `Próxima fluctuación en ${remaining}s`;
+
+        const hist = (data.history || []).map(h => h.rate);
+        drawSparkline('bcb-sparkline', hist.length ? hist : [rate], '#38bdf8');
+      } catch (err) {
+        console.error('Error fetching BCB rate:', err);
+        const info = document.getElementById('bcb-time-info');
+        if (info) info.innerText = 'Error al leer /api/bcb-rate — ¿reiniciaste el servidor?';
+      }
+    }
+
+    async function setBcbInterval(seconds) {
+      bcbInterval = seconds;
+      document.querySelectorAll('.interval-controls .btn-sm').forEach(btn => {
+        const label = btn.innerText.trim();
+        btn.classList.toggle('active', label === (seconds + 's'));
+      });
+      await fetch('/api/bcb-interval', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({interval: seconds}),
+        cache: 'no-store'
+      });
+      lastBcbRate = null;
+      lastBcbPeriod = null;
+      fetchBcbRate();
+    }
+
+    async function forceBcbTick() {
+      await fetch('/api/bcb-tick', { method: 'POST', cache: 'no-store' });
+      fetchBcbRate();
+    }
+
+    function ensureCpuCoreCards(n) {
+      const grid = document.getElementById('cpu-cores-grid');
+      if (grid.children.length === n) return;
+      grid.innerHTML = '';
+      cpuCoreCanvases = {};
+      for (let i = 0; i < n; i++) {
+        const card = document.createElement('div');
+        card.style.cssText = 'background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 12px; padding: 12px;';
+        card.innerHTML = `
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <span style="font-size:12px; color:var(--text-muted);">Núcleo ${i}</span>
+            <span class="mono" id="cpu-core-pct-${i}" style="font-size:14px; font-weight:700; color:var(--accent-blue);">0%</span>
+          </div>
+          <div style="height:10px; background:rgba(0,0,0,0.35); border-radius:999px; overflow:hidden; margin-bottom:8px;">
+            <div id="cpu-core-bar-${i}" style="height:100%; width:0%; background:linear-gradient(90deg, var(--accent-blue), var(--accent-emerald)); transition: width 0.35s ease;"></div>
+          </div>
+          <canvas id="cpu-core-spark-${i}" width="200" height="36" style="width:100%; height:36px;"></canvas>
+        `;
+        grid.appendChild(card);
+        cpuCoreCanvases[i] = [];
+      }
+    }
+
+    function startCpuPolling() {
+      stopCpuPolling();
+      fetchCpuStats();
+      cpuPollTimer = setInterval(fetchCpuStats, 500);
+    }
+
+    function stopCpuPolling() {
+      if (cpuPollTimer) {
+        clearInterval(cpuPollTimer);
+        cpuPollTimer = null;
+      }
+    }
+
+    async function fetchCpuStats() {
+      try {
+        const res = await fetch('/api/cpu-stats');
+        const data = await res.json();
+        const cores = data.per_core_percent || [];
+        ensureCpuCoreCards(cores.length || data.cpu_cores || 1);
+
+        document.getElementById('cpu-core-count').innerText = data.cpu_cores;
+        document.getElementById('cpu-avg').innerText = (data.average_percent ?? 0).toFixed(1) + '%';
+        document.getElementById('cpu-loadavg').innerText = (data.loadavg || []).map(x => x.toFixed(2)).join(' · ') || '—';
+        document.getElementById('cpu-live-label').innerText = `En vivo · ${data.timestamp}`;
+
+        cores.forEach((pct, i) => {
+          const el = document.getElementById(`cpu-core-pct-${i}`);
+          const bar = document.getElementById(`cpu-core-bar-${i}`);
+          if (el) el.innerText = pct.toFixed(1) + '%';
+          if (bar) {
+            bar.style.width = Math.min(100, pct) + '%';
+            bar.style.background = pct > 70
+              ? 'linear-gradient(90deg, var(--accent-amber), var(--accent-rose))'
+              : 'linear-gradient(90deg, var(--accent-blue), var(--accent-emerald))';
+          }
+          if (!cpuCoreCanvases[i]) cpuCoreCanvases[i] = [];
+          cpuCoreCanvases[i].push(pct);
+          if (cpuCoreCanvases[i].length > 30) cpuCoreCanvases[i].shift();
+          drawSparkline(`cpu-core-spark-${i}`, cpuCoreCanvases[i], pct > 70 ? '#f43f5e' : '#38bdf8');
+        });
+
+        const histAvg = (data.history || []).map(h => h.avg);
+        drawSparkline('cpu-history-canvas', histAvg.length ? histAvg : [data.average_percent || 0], '#a855f7');
+      } catch (err) {
+        console.error('CPU stats error:', err);
+      }
+    }
+
+    async function runParallelSweep() {
+      const isDynamic = document.getElementById('chk-dynamic-rate').checked;
+      const updateBankDb = document.getElementById('chk-update-bank-db').checked;
+      const resetFirst = document.getElementById('chk-reset-first').checked;
+      
+      const btn = document.querySelector('.btn-primary');
+      btn.disabled = true;
+      btn.innerHTML = '⏳ Ejecutando Barrido Paralelo en 14 Bancos...';
+
+      try {
+        const res = await fetch('/api/run-sweep', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            dynamic_rate: isDynamic,
+            update_bank_db: updateBankDb,
+            reset_first: resetFirst
+          })
+        });
+        const data = await res.json();
+
+        document.getElementById('sweep-output').style.display = 'block';
+        document.getElementById('sweep-status-text').innerText = 
+          `✅ Barrido Finalizado en ${data.elapsed_seconds}s | Cuentas Procesadas: ${data.total_processed} | Cotización Usada: ${data.exchange_rate} BOB/USD`;
+
+        const perf = data.performance || {};
+        const perfMetric = (label, value, color) => `
+          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 10px; padding: 12px 14px;">
+            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">${label}</div>
+            <div style="font-size: 20px; font-weight: 700; color: ${color}; font-family: ui-monospace, monospace;">${value}</div>
+          </div>`;
+        document.getElementById('sweep-perf-panel').innerHTML = [
+          perfMetric('Núcleos CPU', perf.cpu_cores ?? '—', 'var(--accent-blue)'),
+          perfMetric('Workers máx.', perf.max_calc_workers ?? '—', 'var(--accent-indigo)'),
+          perfMetric('Pico concurrente', perf.peak_concurrent_workers ?? '—', 'var(--accent-emerald)'),
+          perfMetric('Hilos worker', perf.distinct_worker_threads ?? '—', 'var(--accent-amber)'),
+          perfMetric('Throughput', `${perf.throughput_accounts_per_sec ?? 0}/s`, 'var(--accent-purple)'),
+          perfMetric('Hilos OS (pico)', perf.os_threads_during_peak_sample ?? '—', 'var(--accent-rose)'),
+        ].join('');
+
+        const samples = (perf.worker_thread_samples || []).join(', ') || '—';
+        document.getElementById('sweep-perf-detail').innerHTML = `
+          <strong style="color: var(--accent-blue);">Modelo:</strong> ${perf.execution_model || 'N/D'}<br>
+          <strong>Fetch paralelo (14 bancos):</strong> ${perf.fetch_elapsed_seconds ?? '—'}s &nbsp;|&nbsp;
+          <strong>Cálculo multi-hilo:</strong> ${perf.process_elapsed_seconds ?? '—'}s<br>
+          <strong>Workers observados:</strong> <span class="mono" style="color: var(--accent-amber);">${samples}</span>
+        `;
+
+        let rowsHtml = '';
+        for (const [bId, info] of Object.entries(data.bank_summary)) {
+          const bankTime = info.elapsed_seconds != null ? info.elapsed_seconds : data.elapsed_seconds;
+          rowsHtml += `
+            <tr>
+              <td>Banco #${bId}</td>
+              <td><span style="color: ${info.success ? 'var(--accent-emerald)' : 'var(--accent-rose)'};">${info.success ? 'Conectado' : 'Error'}</span></td>
+              <td>${info.count} cuentas</td>
+              <td>${bankTime}s</td>
+            </tr>
+          `;
+        }
+        document.getElementById('sweep-summary-rows').innerHTML = rowsHtml;
+        loadAuditLogs();
+      } catch (err) {
+        alert('Error ejecutando barrido: ' + err);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span>⚡ Ejecutar Barrido Paralelo Completo</span>';
+      }
+    }
+
+    async function loadBanks() {
+      try {
+        const res = await fetch('/api/banks');
+        banksDataCache = await res.json();
+
+        let html = '';
+        banksDataCache.forEach(bank => {
+          let badgeClass = 'badge-relational';
+          if (bank.db_type.includes('No Relacional')) badgeClass = 'badge-nosql';
+          if (bank.db_type.includes('Grafo')) badgeClass = 'badge-graph';
+
+          html += `
+            <div class="bank-card">
+              <div class="bank-header">
+                <div>
+                  <h4 style="font-size: 16px; margin-bottom: 2px;">#${bank.id} ${bank.name}</h4>
+                  <p style="font-size: 12px; color: var(--text-muted);">Algoritmo: <strong style="color: var(--accent-blue);">${bank.algorithm}</strong></p>
+                </div>
+                <span class="bank-badge ${badgeClass}">${bank.db_engine}</span>
+              </div>
+
+              <div class="query-label">Consulta DB asignada:</div>
+              <div class="query-box">${bank.select_query}\n\n${bank.update_query}</div>
+
+              <div style="display: flex; gap: 8px; margin-top: 14px;">
+                <button class="btn-sm" style="flex: 1; text-align: center;" onclick="openBankModal(${bank.id})">
+                  🔍 Ver Cuentas
+                </button>
+                <button class="btn-sm active" style="flex: 1; text-align: center; background: linear-gradient(135deg, var(--accent-indigo), #4f46e5);" onclick="openConsoleModal(${bank.id})">
+                  💻 Consola SQL
+                </button>
+              </div>
+            </div>
+          `;
+        });
+        document.getElementById('banks-cards-container').innerHTML = html;
+      } catch (err) {
+        console.error('Error cargando bancos:', err);
+      }
+    }
+
+    function openBankModal(bankId) {
+      const bank = banksDataCache.find(b => b.id === bankId);
+      if (!bank) return;
+
+      document.getElementById('modal-bank-title').innerText = `Inspector: ${bank.name} (${bank.db_engine})`;
+      
+      let rowsHtml = (bank.sample_accounts || []).map(acc => `
+        <tr>
+          <td class="mono">${acc.cuenta_id}</td>
+          <td>${acc.cliente_nombre || 'Cliente ' + acc.cuenta_id}</td>
+          <td class="mono" style="color: var(--accent-blue); font-weight: 600;">$ ${parseFloat(acc.saldo_usd_cifrado || 0).toFixed(2)} USD</td>
+          <td class="mono" style="color: var(--accent-emerald); font-weight: 600;">Bs. ${acc.saldo_bs ? acc.saldo_bs.toFixed(2) : '0.00'}</td>
+          <td><span class="hex-code mono">${acc.codigo_verificacion || 'SIN_SYNCH'}</span></td>
+        </tr>
+      `).join('');
+
+      document.getElementById('modal-bank-body').innerHTML = `
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">Muestra en vivo de la Base de Datos del banco (Saldos planos en USD y estado tras conversión de ASFI):</p>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Cuenta ID</th>
+                <th>Cliente</th>
+                <th>Saldo USD Plano (En BD Banco)</th>
+                <th>Saldo Bs (Convertido)</th>
+                <th>Código Verificador (8 Hex)</th>
+              </tr>
+            </thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+        </div>
+      `;
+      document.getElementById('bank-modal').classList.add('open');
+    }
+
+    function openConsoleModal(bankId) {
+      const bank = banksDataCache.find(b => b.id === bankId);
+      if (!bank) return;
+
+      document.getElementById('modal-bank-title').innerText = `Consola Interactiva SQL / Query Engine - ${bank.name} (${bank.db_engine})`;
+      
+      const defaultQuery = bank.select_query || `SELECT * FROM CuentasBancarias LIMIT 20;`;
+
+      document.getElementById('modal-bank-body').innerHTML = `
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">
+          Escribe y ejecuta consultas SQL personalizadas directamente en la base de datos de <strong>${bank.name}</strong> (${bank.db_type}).
+        </p>
+        <div style="margin-bottom: 12px;">
+          <textarea id="console-query-input" rows="4" style="width: 100%; font-family: monospace; font-size: 13px; background: rgba(0,0,0,0.3); color: #38bdf8; border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; resize: vertical;">${defaultQuery}</textarea>
+        </div>
+        <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 16px;">
+          <button class="btn-primary" style="width: auto; padding: 8px 20px;" onclick="executeCustomQuery(${bank.id})">
+            ▶️ Ejecutar Consulta
+          </button>
+          <span style="font-size: 12px; color: var(--text-muted);">Formatos aceptados: SQL (SQLite/MySQL/PostgreSQL), MQL/JSON (MongoDB), Cypher/Match (NetworkX/Neo4j)</span>
+        </div>
+
+        <div id="console-query-result" style="margin-top: 10px;">
+          <div style="font-size: 12px; color: var(--text-muted);">Los resultados de la consulta aparecerán aquí...</div>
+        </div>
+      `;
+      document.getElementById('bank-modal').classList.add('open');
+      executeCustomQuery(bank.id);
+    }
+
+    async function executeCustomQuery(bankId) {
+      const query = document.getElementById('console-query-input').value;
+      const resContainer = document.getElementById('console-query-result');
+      resContainer.innerHTML = '<div style="font-size: 12px; color: var(--accent-amber);">⌛ Ejecutando consulta...</div>';
+
+      try {
+        const res = await fetch('/api/query-bank', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ bank_id: bankId, query: query })
+        });
+        const data = await res.json();
+
+        if (data.error) {
+          resContainer.innerHTML = `
+            <div style="color: var(--accent-rose); font-size: 13px; font-weight: 600; padding: 10px; background: rgba(244, 63, 94, 0.1); border-radius: 8px;">
+              ❌ Error en la consulta: ${data.error}
+            </div>
+          `;
+          return;
+        }
+
+        if (!data.results || data.results.length === 0) {
+          resContainer.innerHTML = '<div style="font-size: 13px; color: var(--text-muted); padding: 10px;">0 filas devueltas.</div>';
+          return;
+        }
+
+        const keys = Object.keys(data.results[0]);
+        let tableHeaderHtml = keys.map(k => `<th>${k}</th>`).join('');
+        let tableRowsHtml = data.results.map(row => {
+          let cols = keys.map(k => {
+            let val = row[k];
+            if (typeof val === 'number') val = val.toFixed ? val.toFixed(2) : val;
+            return `<td class="mono">${val !== null && val !== undefined ? val : 'NULL'}</td>`;
+          }).join('');
+          return `<tr>${cols}</tr>`;
+        }).join('');
+
+        resContainer.innerHTML = `
+          <div style="font-size: 12px; color: var(--accent-emerald); font-weight: 600; margin-bottom: 8px;">
+            ✅ ${data.count} registros devueltos (${data.db_type}):
+          </div>
+          <div class="table-container" style="max-height: 350px;">
+            <table>
+              <thead><tr>${tableHeaderHtml}</tr></thead>
+              <tbody>${tableRowsHtml}</tbody>
+            </table>
+          </div>
+        `;
+      } catch (err) {
+        resContainer.innerHTML = `<div style="color: var(--accent-rose);">Error de red/servidor: ${err}</div>`;
+      }
+    }
+
+    function closeBankModal() {
+      document.getElementById('bank-modal').classList.remove('open');
+    }
+
+    async function seedDataset(percent) {
+      try {
+        const res = await fetch('/api/seed', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({percent: percent})
+        });
+        const data = await res.json();
+        
+        document.getElementById('val-total-read').innerText = data.total_read.toLocaleString();
+        document.getElementById('val-total-inserted').innerText = data.total_inserted.toLocaleString();
+        document.getElementById('val-total-discarded').innerText = data.discarded_count.toLocaleString();
+        
+        const rate = (data.discarded_count / data.total_read) * 100;
+        document.getElementById('val-discard-rate').innerText = rate.toFixed(2) + '%';
+
+        let html = data.discarded_sample.map(d => `
+          <tr>
+            <td>Banco #${d.row.IdBanco || '?'}</td>
+            <td class="mono">${d.row.NroCuenta || '?'}</td>
+            <td>${d.row.Nombres || ''} ${d.row.Apellidos || ''}</td>
+            <td class="mono" style="color: var(--accent-rose);">${d.row.Saldo || 'vacio'}</td>
+            <td style="color: var(--accent-amber); font-weight: 500;">${d.reason}</td>
+          </tr>
+        `).join('');
+        document.getElementById('discarded-rows-tbody').innerHTML = html || '<tr><td colspan="5">Sin registros descartados.</td></tr>';
+      } catch (err) {
+        alert('Error en re-sembrado: ' + err);
+      }
+    }
+
+    async function loadAuditLogs() {
+      try {
+        const res = await fetch('/api/audit-logs');
+        auditLogsCache = await res.json();
+        document.getElementById('audit-count-label').innerText = `${auditLogsCache.length} registros cargados`;
+        renderAuditTable(auditLogsCache.slice(0, 100));
+      } catch (err) {
+        console.error('Error audit logs:', err);
+      }
+    }
+
+    function renderAuditTable(logs) {
+      let html = logs.map(l => `
+        <tr>
+          <td class="mono">#${l.id}</td>
+          <td style="color: var(--text-muted);">${l.timestamp}</td>
+          <td class="mono" style="color: var(--accent-amber);">${l.rate.toFixed(4)} BOB</td>
+          <td class="mono">${l.account_id}</td>
+          <td>Banco #${l.bank_id}</td>
+          <td><span class="hex-code mono">${l.hex_code}</span></td>
+        </tr>
+      `).join('');
+      document.getElementById('audit-table-tbody').innerHTML = html;
+    }
+
+    function filterAuditLogs() {
+      const q = document.getElementById('audit-search').value.toLowerCase();
+      const filtered = auditLogsCache.filter(l => 
+        l.account_id.toString().includes(q) ||
+        l.bank_id.toString().includes(q) ||
+        l.hex_code.toLowerCase().includes(q) ||
+        l.rate.toString().includes(q)
+      );
+      renderAuditTable(filtered.slice(0, 100));
+    }
+
+    // Auto-update BCB rate every 1s
+    setInterval(fetchBcbRate, 1000);
+    fetchBcbRate();
+    // No auto-seed al cargar: reseeding bloqueaba la sensación de "tiempo real".
+  </script>
+</body>
+</html>
+

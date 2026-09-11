@@ -78,14 +78,78 @@ def seed_bank_databases_from_csv(csv_path: str = "01 - Practica 2 Dataset.csv", 
     print(f"📥 Leyendo dataset original: '{csv_path}'...")
     bank_rows = defaultdict(list)
     
+def validate_account_record(row: dict) -> tuple[bool, str]:
+    """
+    Validación estricta de registros de entrada (CSV/Excel).
+    Filtra datos inválidos: saldos negativos, texto no numérico en montos,
+    números de cuenta corruptos e IDs de banco fuera de rango.
+    """
+    # 1. Validar IdBanco (debe ser entero entre 1 y 14)
+    raw_b_id = str(row.get("IdBanco", "")).strip()
+    try:
+        b_id = int(raw_b_id)
+        if not (1 <= b_id <= 14):
+            return False, f"ID de Banco inválido ({raw_b_id})"
+    except ValueError:
+        return False, f"ID de Banco no numérico ({raw_b_id})"
+
+    # 2. Validar Saldo (debe ser numérico no negativo >= 0.0)
+    raw_saldo = str(row.get("Saldo", "")).strip()
+    if not raw_saldo:
+        return False, "Saldo vacío"
+    try:
+        saldo_val = float(raw_saldo)
+        if math.isnan(saldo_val) or math.isinf(saldo_val):
+            return False, "Saldo NaN/Infinito"
+        if saldo_val < 0.0:
+            return False, f"Saldo negativo ({saldo_val})"
+    except ValueError:
+        return False, f"Saldo contiene caracteres no numéricos ('{raw_saldo}')"
+
+    # 3. Validar NroCuenta
+    raw_cuenta = str(row.get("NroCuenta", "")).strip()
+    if not raw_cuenta:
+        return False, "Número de Cuenta vacío"
+
+    # 4. Validar Identidad (Nombres / Apellidos)
+    nombres = str(row.get("Nombres", "")).strip()
+    apellidos = str(row.get("Apellidos", "")).strip()
+    if not nombres and not apellidos:
+        return False, "Nombre y Apellidos vacíos"
+
+    return True, "OK"
+
+def seed_bank_databases_from_csv(csv_path: str = "01 - Practica 2 Dataset.csv", sample_rate: float = 0.01):
+    import sqlite3
+    if os.path.exists(ASFI_DB_PATH):
+        conn = sqlite3.connect(ASFI_DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM Cuentas")
+        cursor.execute("DELETE FROM AuditLogs")
+        conn.commit()
+        conn.close()
+
+    bank_db_manager._init_bank_stores(reset=True)
+
+    if not os.path.exists(csv_path):
+        from scripts.generate_sample_excel import generate_sample_excel
+        csv_path = generate_sample_excel("cuentas_bancarias_muestra.csv")
+
+    print(f"📥 Leyendo dataset original: '{csv_path}'...")
+    bank_rows = defaultdict(list)
+    total_rows_read = 0
+    discarded_rows = []
+
     with open(csv_path, "r", encoding="utf-8", errors="ignore") as f:
         reader = csv.DictReader(f)
         for row in reader:
-            try:
+            total_rows_read += 1
+            is_valid, reason = validate_account_record(row)
+            if is_valid:
                 b_id = int(row["IdBanco"])
                 bank_rows[b_id].append(row)
-            except (ValueError, KeyError):
-                continue
+            else:
+                discarded_rows.append({"row": row, "reason": reason})
 
     sampled_records = []
     pct_display = sample_rate * 100 if sample_rate <= 1.0 else sample_rate
@@ -96,7 +160,7 @@ def seed_bank_databases_from_csv(csv_path: str = "01 - Practica 2 Dataset.csv", 
         sample_n = max(1, math.ceil(len(rows) * sample_rate))
         sampled_b = rows[:sample_n]
         sampled_records.extend(sampled_b)
-        print(f"   - Banco #{b_id:2d}: {len(rows):5d} totales -> Muestra ({pct_display:.2f}%): {len(sampled_b):4d} cuentas")
+        print(f"   - Banco #{b_id:2d}: {len(rows):5d} válidas -> Muestra ({pct_display:.2f}%): {len(sampled_b):4d} cuentas")
 
     total_inserted = 0
     fallback_counter = 100000
@@ -109,17 +173,17 @@ def seed_bank_databases_from_csv(csv_path: str = "01 - Practica 2 Dataset.csv", 
         nombres = str(row.get("Nombres", "")).strip()
         apellidos = str(row.get("Apellidos", "")).strip()
         cliente = f"{nombres} {apellidos}".strip() or f"Cliente_{cuenta_id}"
-        
-        try:
-            saldo_usd = round(float(row["Saldo"]), 4)
-        except (ValueError, KeyError):
-            saldo_usd = 1000.00
-
-        saldo_cifrado = encrypt_balance(banco_id, saldo_usd)
-        bank_db_manager.insert_encrypted_account(banco_id, cuenta_id, cliente, saldo_cifrado)
+        saldo_usd = round(float(row["Saldo"]), 4)
+        bank_db_manager.insert_encrypted_account(banco_id, cuenta_id, cliente, str(saldo_usd))
         total_inserted += 1
 
-    print(f"\n🎉 ¡Población de datos completada! Se ingresaron {total_inserted} cuentas en las 14 bases de datos bancarias.\n")
+    print(f"\n🎉 ¡Población de datos completada! {total_inserted} cuentas ingresadas en 14 BDs. (Filas leídas: {total_rows_read}, Descartadas por validación: {len(discarded_rows)})\n")
+    return {
+        "total_read": total_rows_read,
+        "total_inserted": total_inserted,
+        "discarded_count": len(discarded_rows),
+        "discarded_sample": discarded_rows[:10]
+    }
 
 # Alias para compatibilidad
 seed_bank_databases_from_excel = seed_bank_databases_from_csv

@@ -11,15 +11,17 @@ Diseño e implementación de la base de datos relacional central de la ASFI:
 import sqlite3
 import datetime
 import os
+import threading
 from config import ASFI_DB_PATH, BANKS
 
 class ASFICentralDatabase:
     def __init__(self, db_path: str = ASFI_DB_PATH):
         self.db_path = db_path
+        self._write_lock = threading.Lock()
         self._init_db()
 
     def _get_connection(self):
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=30, check_same_thread=False)
         # Habilitar restricciones de llaves foráneas en SQLite
         conn.execute("PRAGMA foreign_keys = ON;")
         return conn
@@ -99,29 +101,30 @@ class ASFICentralDatabase:
         if not timestamp:
             timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        conn = self._get_connection()
-        cursor = conn.cursor()
+        with self._write_lock:
+            conn = self._get_connection()
+            cursor = conn.cursor()
 
-        # Insertar o actualizar cuenta consolidada en ASFI
-        cursor.execute("""
-            INSERT INTO Cuentas (CuentaId, BancoId, SaldoUSD, SaldoBs, FechaConversion, CodigoVerificacion)
-            VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(CuentaId) DO UPDATE SET
-                BancoId = excluded.BancoId,
-                SaldoUSD = excluded.SaldoUSD,
-                SaldoBs = excluded.SaldoBs,
-                FechaConversion = excluded.FechaConversion,
-                CodigoVerificacion = excluded.CodigoVerificacion
-        """, (cuenta_id, banco_id, saldo_usd, saldo_bs, timestamp, verification_code))
+            # Insertar o actualizar cuenta consolidada en ASFI
+            cursor.execute("""
+                INSERT INTO Cuentas (CuentaId, BancoId, SaldoUSD, SaldoBs, FechaConversion, CodigoVerificacion)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(CuentaId) DO UPDATE SET
+                    BancoId = excluded.BancoId,
+                    SaldoUSD = excluded.SaldoUSD,
+                    SaldoBs = excluded.SaldoBs,
+                    FechaConversion = excluded.FechaConversion,
+                    CodigoVerificacion = excluded.CodigoVerificacion
+            """, (cuenta_id, banco_id, saldo_usd, saldo_bs, timestamp, verification_code))
 
-        # Registrar log de auditoría
-        cursor.execute("""
-            INSERT INTO AuditLogs (Timestamp, ExchangeRate, CuentaId, BancoId)
-            VALUES (?, ?, ?, ?)
-        """, (timestamp, exchange_rate, cuenta_id, banco_id))
+            # Registrar log de auditoría
+            cursor.execute("""
+                INSERT INTO AuditLogs (Timestamp, ExchangeRate, CuentaId, BancoId)
+                VALUES (?, ?, ?, ?)
+            """, (timestamp, exchange_rate, cuenta_id, banco_id))
 
-        conn.commit()
-        conn.close()
+            conn.commit()
+            conn.close()
 
     def get_all_accounts(self):
         conn = self._get_connection()

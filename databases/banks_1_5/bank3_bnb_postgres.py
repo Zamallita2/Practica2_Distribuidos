@@ -20,7 +20,7 @@ except ImportError:
     HAS_PSYCOPG2 = False
 
 PG_HOST = os.environ.get("BANK3_PG_HOST", "localhost")
-PG_PORT = int(os.environ.get("BANK3_PG_PORT", "5432"))
+PG_PORT = int(os.environ.get("BANK3_PG_PORT", "5433"))
 PG_USER = os.environ.get("BANK3_PG_USER", "postgres")
 PG_PASSWORD = os.environ.get("BANK3_PG_PASSWORD", "postgres123")
 PG_DATABASE = os.environ.get("BANK3_PG_DATABASE", "banco_bnb")

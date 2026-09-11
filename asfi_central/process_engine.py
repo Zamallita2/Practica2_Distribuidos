@@ -34,10 +34,10 @@ class ASFICentralProcessEngine:
         """Genera un código alfanumérico hexadecimal único de 8 caracteres (0–9, A–F)."""
         return secrets.token_hex(4).upper()
 
-    def process_bank_account_payload(self, bank_id: int, account_data: dict, exchange_rate: float = None):
+    def process_bank_account_payload(self, bank_id: int, account_data: dict, exchange_rate: float = None, update_bank_db: bool = True):
         """
         Procesa una cuenta bancaria individual: descifrado, conversión, código hex,
-        persistencia en ASFI DB, sincronización con el banco y registro de auditoría.
+        persistencia en ASFI DB, sincronización opcional con el banco y registro de auditoría.
         """
         if exchange_rate is None:
             exchange_rate = bcb_engine.get_current_rate()["current_rate"]
@@ -73,14 +73,16 @@ class ASFICentralProcessEngine:
         audit_log_msg = f"{exchange_rate:.4f} | CuentaId: {cuenta_id} | BancoId: {bank_id} | HexVerif: {verification_code}"
         audit_logger.info(audit_log_msg)
 
-        # 6. Sincronizar y actualizar el saldo en la base de datos del banco correspondiente
-        synced = bank_db_manager.update_verification_code(
-            bank_id=bank_id,
-            cuenta_id=cuenta_id,
-            saldo_bs=saldo_bs,
-            verification_code=verification_code,
-            timestamp=timestamp
-        )
+        # 6. Sincronizar y actualizar el saldo en la base de datos del banco correspondiente (si está activado)
+        synced = False
+        if update_bank_db:
+            synced = bank_db_manager.update_verification_code(
+                bank_id=bank_id,
+                cuenta_id=cuenta_id,
+                saldo_bs=saldo_bs,
+                verification_code=verification_code,
+                timestamp=timestamp
+            )
 
         return {
             "cuenta_id": cuenta_id,

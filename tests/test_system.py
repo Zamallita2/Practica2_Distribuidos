@@ -46,23 +46,27 @@ class TestBCBEngine(unittest.TestCase):
     def test_rate_is_shared_within_window_and_changes_after_interval(self):
         from bcb_service.rate_engine import BCBExchangeRateEngine
 
-        with patch("bcb_service.rate_engine.time.time", side_effect=[1000.0, 1001.0, 1001.0, 1180.0]):
-            engine = BCBExchangeRateEngine(base_rate=6.9600, interval=180)
+        engine = BCBExchangeRateEngine(base_rate=6.9600, interval=180, auto_start=False)
+        try:
             first = engine.get_current_rate()
             same_window = engine.get_current_rate()
+            engine.force_tick()
             next_window = engine.get_current_rate()
 
-        self.assertEqual(first["current_rate"], same_window["current_rate"])
-        self.assertNotEqual(first["period_index"], next_window["period_index"])
-        self.assertEqual(first["period_index"], 0)
-        self.assertEqual(next_window["period_index"], 1)
-        self.assertEqual(len(f"{first['current_rate']:.4f}".split(".")[1]), 4)
+            self.assertEqual(first["current_rate"], same_window["current_rate"])
+            self.assertNotEqual(first["period_index"], next_window["period_index"])
+            self.assertNotEqual(first["current_rate"], next_window["current_rate"])
+            self.assertEqual(first["period_index"], 0)
+            self.assertEqual(next_window["period_index"], 1)
+            self.assertEqual(len(f"{first['current_rate']:.4f}".split(".")[1]), 4)
+        finally:
+            engine.stop()
 
     def test_interval_must_be_positive(self):
         from bcb_service.rate_engine import BCBExchangeRateEngine
 
         with self.assertRaises(ValueError):
-            BCBExchangeRateEngine(interval=0)
+            BCBExchangeRateEngine(interval=0, auto_start=False)
 
 class TestParallelSweep(unittest.TestCase):
     def test_sweeper_execution(self):
