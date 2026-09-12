@@ -57,11 +57,15 @@ class BankBISAGraphAdapter:
     def __init__(self, data_dir: str = "bank_data"):
         os.makedirs(data_dir, exist_ok=True)
         self.graph_path = os.path.join(data_dir, "bank5_bisa_graph.json")
-        self.graph = nx.DiGraph() if HAS_NETWORKX else SimpleGraph()
         self.create_schema()
 
     def create_schema(self):
         self.graph = nx.DiGraph() if HAS_NETWORKX else SimpleGraph()
+        if os.path.exists(self.graph_path):
+            try:
+                os.remove(self.graph_path)
+            except OSError:
+                pass
         self._persist()
 
     def _persist(self):
@@ -92,10 +96,9 @@ class BankBISAGraphAdapter:
                         g.add_edge(u, v, **e)
                     self.graph = g
             except (json.JSONDecodeError, ValueError):
-                pass
+                self.graph = nx.DiGraph() if HAS_NETWORKX else SimpleGraph()
 
     def insert_encrypted_account(self, cuenta_id: int, cliente_nombre: str, saldo_cifrado: str):
-        self._load()
         client_node = f"Cliente_{cliente_nombre.replace(' ', '_')}"
         account_node = f"Cuenta_{cuenta_id}"
 
@@ -113,13 +116,26 @@ class BankBISAGraphAdapter:
         self._persist()
 
     def get_encrypted_accounts(self):
-        self._load()
         accounts = []
         nodes_iter = self.graph.nodes(data=True) if HAS_NETWORKX else self.graph.nodes_data.items()
-        for _, data in nodes_iter:
+        for node_id, data in nodes_iter:
             if data.get("tipo") == "Cuenta":
+                # Encontrar el cliente asociado via edge de entrada
+                cliente_nombre = "Cliente BISA"
+                if HAS_NETWORKX:
+                    for pred in self.graph.predecessors(node_id):
+                        if self.graph.nodes[pred].get("tipo") == "Cliente":
+                            cliente_nombre = self.graph.nodes[pred].get("nombre", cliente_nombre)
+                            break
+                else:
+                    for u, v, _ in self.graph.edges:
+                        if v == node_id and u in self.graph.nodes_data:
+                            cliente_nombre = self.graph.nodes_data[u].get("nombre", cliente_nombre)
+                            break
+
                 accounts.append({
                     "cuenta_id": data["cuenta_id"],
+                    "cliente_nombre": cliente_nombre,
                     "saldo_usd_cifrado": data["saldo_usd_cifrado"],
                     "saldo_bs": data.get("saldo_bs", 0.0),
                     "codigo_verificacion": data.get("codigo_verificacion", ""),
@@ -127,7 +143,6 @@ class BankBISAGraphAdapter:
         return accounts
 
     def update_verification_code(self, cuenta_id: int, saldo_bs: float, verification_code: str, timestamp: str) -> bool:
-        self._load()
         account_node = f"Cuenta_{cuenta_id}"
         if account_node not in self.graph:
             return False
@@ -139,7 +154,7 @@ class BankBISAGraphAdapter:
         return True
 
 
-
 if __name__ == "__main__":
     adapter = BankBISAGraphAdapter()
     print(f"Banco BISA S.A. (Grafo NetworkX) -> esquema creado en '{adapter.graph_path}' [engine_mode={adapter.engine_mode}]")
+

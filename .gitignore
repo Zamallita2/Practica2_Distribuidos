@@ -9,6 +9,8 @@ bank_data/*.db
 bank_data/*.json
 asfi_central.db
 asfi_audit.log
+uploads/
+.venv/
 .DS_Store
 PRACTICA_2_PYTHON-devDevon/
 

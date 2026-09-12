@@ -169,8 +169,8 @@
       margin: 8px 0;
       transition: color 0.25s ease, transform 0.25s ease;
     }
-    .rate-value.flash-up { color: #4ade80; transform: scale(1.06); }
-    .rate-value.flash-down { color: #fb7185; transform: scale(1.06); }
+    .rate-value.flash-up { color: #4ade80; transform: scale(1.04); }
+    .rate-value.flash-down { color: #fb7185; transform: scale(1.04); }
 
     .rate-subtitle {
       font-size: 13px;
@@ -467,7 +467,9 @@
             <div class="rate-subtitle" id="bcb-time-info">Actualizado: --:--:--</div>
           </div>
 
-          <canvas id="bcb-sparkline" width="480" height="56" style="width: 100%; height: 56px; margin: 8px 0 12px; background: rgba(0,0,0,0.2); border-radius: 8px;"></canvas>
+          <div id="bcb-rate-chips" style="display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin: 8px 0 12px; min-height: 28px;"></div>
+
+          <canvas id="bcb-sparkline" width="480" height="56" style="width: 100%; height: 56px; margin: 0 0 12px; background: rgba(0,0,0,0.2); border-radius: 8px;"></canvas>
 
           <div class="countdown-bar">
             <div class="countdown-fill" id="bcb-progress"></div>
@@ -476,10 +478,9 @@
 
           <div class="interval-controls">
             <span style="font-size: 12px; color: var(--text-muted);">Intervalo Fluctuación:</span>
-            <button class="btn-sm active" onclick="setBcbInterval(3)">3s</button>
-            <button class="btn-sm" onclick="setBcbInterval(5)">5s</button>
+            <button class="btn-sm active" onclick="setBcbInterval(5)">5s</button>
             <button class="btn-sm" onclick="setBcbInterval(10)">10s</button>
-            <button class="btn-sm" onclick="forceBcbTick()" title="Forzar cambio ahora">⚡ Ahora</button>
+            <button class="btn-sm" onclick="setBcbInterval(30)">30s</button>
           </div>
         </div>
 
@@ -558,18 +559,47 @@
       <div class="card" style="margin-bottom: 24px;">
         <div class="card-title">
           <span>🛡️ Motor de Ingesta & Validaciones Estrictas de Datos</span>
-          <span class="badge-relational" style="font-size: 12px;">Dataset: 01 - Practica 2 Dataset.csv</span>
+          <span class="badge-relational" style="font-size: 12px;" id="dataset-badge">Dataset: —</span>
         </div>
 
-        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px;">
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
           Valida rigurosamente los datos antes de introducirlos a las bases de datos de los bancos. Filtra saldos negativos, texto no numérico en montos, números de cuenta corruptos e IDs de banco inválidos.
         </p>
 
-        <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 20px;">
-          <span style="font-size: 13px; font-weight: 600;">Re-sembrar BDs con Porcentaje:</span>
-          <button class="btn-sm active" onclick="seedDataset(1.0)">1.0% (Muestra)</button>
-          <button class="btn-sm" onclick="seedDataset(2.0)">2.0%</button>
-          <button class="btn-sm" onclick="seedDataset(5.0)">5.0%</button>
+        <div style="display:grid; gap: 14px; margin-bottom: 20px;">
+          <div style="padding: 14px; border: 1px solid var(--border-color); border-radius: 12px; background: rgba(255,255,255,0.02);">
+            <div style="font-size: 13px; font-weight: 600; margin-bottom: 8px;">1) Dataset CSV activo</div>
+            <div id="dataset-info" style="font-size: 12px; color: var(--text-muted); margin-bottom: 10px;">Cargando…</div>
+            <div style="display:flex; flex-wrap:wrap; gap: 10px; align-items:center;">
+              <input type="file" id="csv-file-input" accept=".csv,text/csv" style="font-size: 12px; color: var(--text-muted);">
+              <button class="btn-sm active" onclick="uploadCsvFile()">⬆️ Subir CSV</button>
+            </div>
+          </div>
+
+          <div style="padding: 14px; border: 1px solid var(--border-color); border-radius: 12px; background: rgba(255,255,255,0.02);">
+            <div style="font-size: 13px; font-weight: 600; margin-bottom: 8px;">2) Limpiar bases de datos</div>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 10px;">
+              Borra cuentas y audit logs de ASFI + vacía los 14 bancos. No borra el CSV.
+            </p>
+            <button class="btn-sm" style="background: rgba(244,63,94,0.15); border-color: rgba(244,63,94,0.4); color: var(--accent-rose);" onclick="wipeDatabases()">
+              🗑️ Borrar todas las BDs
+            </button>
+          </div>
+
+          <div style="padding: 14px; border: 1px solid var(--border-color); border-radius: 12px; background: rgba(255,255,255,0.02);">
+            <div style="font-size: 13px; font-weight: 600; margin-bottom: 8px;">3) Seed / Poblar bases</div>
+            <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px;">
+              <span style="font-size: 13px;">Porcentaje de muestra:</span>
+              <button class="btn-sm active" id="seed-pct-1" onclick="setSeedPercent(1)">1%</button>
+              <button class="btn-sm" id="seed-pct-2" onclick="setSeedPercent(2)">2%</button>
+              <button class="btn-sm" id="seed-pct-5" onclick="setSeedPercent(5)">5%</button>
+              <button class="btn-sm" id="seed-pct-100" onclick="setSeedPercent(100)">100%</button>
+            </div>
+            <button class="btn-primary" style="width: auto; padding: 10px 22px;" onclick="runSeed()">
+              🌱 Ejecutar Seed de la Base de Datos
+            </button>
+            <div id="seed-status" style="font-size: 12px; color: var(--text-muted); margin-top: 10px;"></div>
+          </div>
         </div>
 
         <div class="stats-row" style="margin-bottom: 0;">
@@ -623,7 +653,12 @@
       <div class="card">
         <div class="card-title">
           <span>📜 Registros de Auditoría ASFI (AuditLogs DB & asfi_audit.log)</span>
-          <span style="font-size: 12px; color: var(--text-muted);" id="audit-count-label">Cargando...</span>
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <button class="btn-sm active" style="background: linear-gradient(135deg, var(--accent-indigo), #4f46e5);" onclick="openAsfiConsoleModal()">
+              💻 Consola SQL ASFI Central
+            </button>
+            <span style="font-size: 12px; color: var(--text-muted);" id="audit-count-label">Cargando...</span>
+          </div>
         </div>
 
         <input type="text" class="search-input" id="audit-search" placeholder="🔍 Buscar por ID Cuenta, Banco, Código Hex o Tasa de cambio..." onkeyup="filterAuditLogs()">
@@ -695,12 +730,11 @@
   </div>
 
   <script>
-    let bcbInterval = 3;
+    let bcbInterval = 5;
     let bcbTimer = null;
     let auditLogsCache = [];
     let banksDataCache = [];
     let lastBcbRate = null;
-    let lastBcbPeriod = null;
     let cpuPollTimer = null;
     let cpuCoreCanvases = {};
 
@@ -713,6 +747,7 @@
 
       if (tabId === 'tab-banks') loadBanks();
       if (tabId === 'tab-audit') loadAuditLogs();
+      if (tabId === 'tab-validation') refreshDatasetInfo();
       if (tabId === 'tab-cpu') startCpuPolling();
       else stopCpuPolling();
     }
@@ -740,44 +775,44 @@
 
     async function fetchBcbRate() {
       try {
-        const res = await fetch('/api/bcb-rate?_=' + Date.now(), { cache: 'no-store' });
+        const res = await fetch('/api/bcb-rate?ts=' + Date.now());
         const data = await res.json();
         if (data.interval) bcbInterval = data.interval;
 
         const rate = Number(data.current_rate);
-        const valEl = document.getElementById('bcb-rate-value');
-        valEl.innerText = rate.toFixed(4) + ' BOB';
+        const rateEl = document.getElementById('bcb-rate-value');
+        rateEl.innerText = rate.toFixed(4) + ' BOB';
         document.getElementById('stat-rate-small').innerText = rate.toFixed(4);
-
-        const tickerOk = data.ticker_alive === false ? ' · ⚠ ticker detenido' : '';
         document.getElementById('bcb-time-info').innerText =
-          `Instante: ${data.timestamp} · Periodo #${data.period_index} · Intervalo ${data.interval}s${tickerOk}`;
+          `Instante: ${data.timestamp} · Periodo #${data.period_index} · Intervalo ${data.interval}s` +
+          (data.ticker_alive ? ' · ticker ON' : ' · ticker OFF');
 
         const deltaEl = document.getElementById('bcb-delta');
-        const periodChanged = lastBcbPeriod !== null && data.period_index !== lastBcbPeriod;
-        const rateChanged = lastBcbRate !== null && lastBcbRate !== rate;
-
-        if (data.delta == null && !rateChanged) {
+        if (data.delta == null) {
           deltaEl.style.color = 'var(--text-muted)';
-          deltaEl.innerText = 'Cotización activa — esperando primera fluctuación del ticker…';
+          deltaEl.innerText = 'Esperando primera fluctuación…';
         } else {
-          const d = data.delta != null ? data.delta : (rate - lastBcbRate);
-          const up = d >= 0;
+          const up = data.delta >= 0;
           deltaEl.style.color = up ? 'var(--accent-emerald)' : 'var(--accent-rose)';
-          deltaEl.innerText = `${up ? '▲' : '▼'} ${up ? '+' : ''}${Number(d).toFixed(4)} BOB  (ASFI usa este valor al convertir)`;
+          deltaEl.innerText = `${up ? '▲' : '▼'} ${up ? '+' : ''}${Number(data.delta).toFixed(4)} vs cotización anterior`;
         }
 
-        if (rateChanged || periodChanged) {
-          valEl.classList.remove('flash-up', 'flash-down');
-          void valEl.offsetWidth;
-          const up = data.delta == null ? rate >= lastBcbRate : data.delta >= 0;
-          valEl.classList.add(up ? 'flash-up' : 'flash-down');
-          setTimeout(() => valEl.classList.remove('flash-up', 'flash-down'), 600);
-          const spin = document.getElementById('bcb-spin');
-          if (spin) spin.style.transform = `rotate(${data.period_index * 40}deg)`;
+        if (lastBcbRate !== null && lastBcbRate !== rate) {
+          rateEl.classList.remove('flash-up', 'flash-down');
+          void rateEl.offsetWidth;
+          rateEl.classList.add(data.delta >= 0 ? 'flash-up' : 'flash-down');
+          setTimeout(() => rateEl.classList.remove('flash-up', 'flash-down'), 700);
         }
         lastBcbRate = rate;
-        lastBcbPeriod = data.period_index;
+
+        const chips = document.getElementById('bcb-rate-chips');
+        if (chips) {
+          const histChips = (data.history || []).slice(-8);
+          chips.innerHTML = histChips.map((h, idx) => {
+            const last = idx === histChips.length - 1;
+            return `<span class="mono" style="font-size:11px; padding:3px 8px; border-radius:999px; border:1px solid var(--border-color); background:${last ? 'rgba(52,211,153,0.15)' : 'rgba(255,255,255,0.03)'}; color:${last ? 'var(--accent-emerald)' : 'var(--text-muted)'};">${Number(h.rate).toFixed(4)}</span>`;
+          }).join('');
+        }
 
         const remaining = data.seconds_until_next_change;
         const frac = data.fraction_until_next_change != null ? data.fraction_until_next_change : (remaining / bcbInterval);
@@ -788,30 +823,24 @@
         drawSparkline('bcb-sparkline', hist.length ? hist : [rate], '#38bdf8');
       } catch (err) {
         console.error('Error fetching BCB rate:', err);
-        const info = document.getElementById('bcb-time-info');
-        if (info) info.innerText = 'Error al leer /api/bcb-rate — ¿reiniciaste el servidor?';
       }
     }
 
     async function setBcbInterval(seconds) {
       bcbInterval = seconds;
       document.querySelectorAll('.interval-controls .btn-sm').forEach(btn => {
-        const label = btn.innerText.trim();
-        btn.classList.toggle('active', label === (seconds + 's'));
+        btn.classList.toggle('active', btn.innerText.includes(seconds + 's'));
       });
-      await fetch('/api/bcb-interval', {
+      const res = await fetch('/api/bcb-interval', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({interval: seconds}),
-        cache: 'no-store'
+        body: JSON.stringify({interval: seconds})
       });
-      lastBcbRate = null;
-      lastBcbPeriod = null;
-      fetchBcbRate();
-    }
-
-    async function forceBcbTick() {
-      await fetch('/api/bcb-tick', { method: 'POST', cache: 'no-store' });
+      const data = await res.json();
+      if (data.rate) {
+        // Forzar refresco inmediato con la nueva cotización del reset
+        lastBcbRate = null;
+      }
       fetchBcbRate();
     }
 
@@ -1117,11 +1146,182 @@
       }
     }
 
+    function openAsfiConsoleModal() {
+      document.getElementById('modal-bank-title').innerText = `Consola Interactiva SQL - ASFI Central (asfi_central.db)`;
+      
+      const defaultQuery = `SELECT * FROM AuditLogs ORDER BY LogId DESC LIMIT 20;`;
+
+      document.getElementById('modal-bank-body').innerHTML = `
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">
+          Escribe y ejecuta consultas SQL personalizadas directamente en la base de datos central de la <strong>ASFI</strong> (Tablas: <code>AuditLogs</code>, <code>Cuentas</code>, <code>Bancos</code>).
+        </p>
+        <div style="margin-bottom: 12px;">
+          <textarea id="console-asfi-query-input" rows="4" style="width: 100%; font-family: monospace; font-size: 13px; background: rgba(0,0,0,0.3); color: #38bdf8; border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; resize: vertical;">${defaultQuery}</textarea>
+        </div>
+        <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 16px;">
+          <button class="btn-primary" style="width: auto; padding: 8px 20px;" onclick="executeAsfiCustomQuery()">
+            ▶️ Ejecutar Consulta en ASFI
+          </button>
+          <span style="font-size: 12px; color: var(--text-muted);">Consultas rápidas sugeridas: <code>SELECT * FROM AuditLogs;</code> o <code>SELECT * FROM Cuentas;</code></span>
+        </div>
+
+        <div id="console-asfi-query-result" style="margin-top: 10px;">
+          <div style="font-size: 12px; color: var(--text-muted);">Los resultados de la consulta aparecerán aquí...</div>
+        </div>
+      `;
+      document.getElementById('bank-modal').classList.add('open');
+      executeAsfiCustomQuery();
+    }
+
+    async function executeAsfiCustomQuery() {
+      const query = document.getElementById('console-asfi-query-input').value;
+      const resContainer = document.getElementById('console-asfi-query-result');
+      resContainer.innerHTML = '<div style="font-size: 12px; color: var(--accent-amber);">⌛ Ejecutando consulta en ASFI Central...</div>';
+
+      try {
+        const res = await fetch('/api/query-asfi', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ query: query })
+        });
+        const data = await res.json();
+
+        if (data.error) {
+          resContainer.innerHTML = `
+            <div style="color: var(--accent-rose); font-size: 13px; font-weight: 600; padding: 10px; background: rgba(244, 63, 94, 0.1); border-radius: 8px;">
+              ❌ Error en la consulta: ${data.error}
+            </div>
+          `;
+          return;
+        }
+
+        if (!data.results || data.results.length === 0) {
+          resContainer.innerHTML = '<div style="font-size: 13px; color: var(--text-muted); padding: 10px;">0 filas devueltas.</div>';
+          return;
+        }
+
+        const keys = Object.keys(data.results[0]);
+        let tableHeaderHtml = keys.map(k => `<th>${k}</th>`).join('');
+        let tableRowsHtml = data.results.map(row => {
+          let cols = keys.map(k => {
+            let val = row[k];
+            if (typeof val === 'number') val = val.toFixed ? val.toFixed(2) : val;
+            return `<td class="mono">${val !== null && val !== undefined ? val : 'NULL'}</td>`;
+          }).join('');
+          return `<tr>${cols}</tr>`;
+        }).join('');
+
+        resContainer.innerHTML = `
+          <div style="font-size: 12px; color: var(--accent-emerald); font-weight: 600; margin-bottom: 8px;">
+            ✅ ${data.count} registros devueltos (${data.db_type}):
+          </div>
+          <div class="table-container" style="max-height: 350px;">
+            <table>
+              <thead><tr>${tableHeaderHtml}</tr></thead>
+              <tbody>${tableRowsHtml}</tbody>
+            </table>
+          </div>
+        `;
+      } catch (err) {
+        resContainer.innerHTML = `<div style="color: var(--accent-rose);">Error de red/servidor: ${err}</div>`;
+      }
+    }
+
     function closeBankModal() {
       document.getElementById('bank-modal').classList.remove('open');
     }
 
+    let selectedSeedPercent = 1;
+
+    function setSeedPercent(pct) {
+      selectedSeedPercent = pct;
+      [1, 2, 5, 100].forEach(p => {
+        const btn = document.getElementById('seed-pct-' + p);
+        if (btn) btn.classList.toggle('active', p === pct);
+      });
+    }
+
+    function formatBytes(n) {
+      if (!n && n !== 0) return '—';
+      if (n < 1024) return n + ' B';
+      if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+      return (n / (1024 * 1024)).toFixed(2) + ' MB';
+    }
+
+    async function refreshDatasetInfo() {
+      try {
+        const res = await fetch('/api/dataset');
+        const d = await res.json();
+        document.getElementById('dataset-badge').innerText = 'Dataset: ' + (d.filename || '—');
+        document.getElementById('dataset-info').innerHTML = d.exists
+          ? `<strong style="color:var(--accent-emerald);">${d.filename}</strong> · ${formatBytes(d.size_bytes)} · origen: ${d.source || 'default'}${d.uploaded_at ? ' · subido: ' + d.uploaded_at : ''}<br><span class="mono" style="font-size:11px;">${d.path}</span>`
+          : `<span style="color:var(--accent-rose);">No hay CSV activo. Sube uno o coloca "01 - Practica 2 Dataset.csv" en la raíz del proyecto.</span>`;
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function uploadCsvFile() {
+      const input = document.getElementById('csv-file-input');
+      if (!input.files || !input.files[0]) {
+        alert('Selecciona un archivo CSV primero.');
+        return;
+      }
+      const file = input.files[0];
+      const status = document.getElementById('seed-status');
+      status.style.color = 'var(--accent-amber)';
+      status.innerText = `Subiendo ${file.name} (${formatBytes(file.size)})…`;
+      try {
+        const res = await fetch('/api/upload-csv', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/octet-stream',
+            'X-Filename': file.name
+          },
+          body: file
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Fallo al subir');
+        status.style.color = 'var(--accent-emerald)';
+        status.innerText = `✅ CSV activo: ${data.dataset.filename} (${formatBytes(data.bytes)})`;
+        refreshDatasetInfo();
+      } catch (err) {
+        status.style.color = 'var(--accent-rose)';
+        status.innerText = 'Error subiendo CSV: ' + err;
+      }
+    }
+
+    async function wipeDatabases() {
+      if (!confirm('¿Borrar TODAS las bases de datos (ASFI + 14 bancos)? El CSV no se elimina.')) return;
+      const status = document.getElementById('seed-status');
+      status.style.color = 'var(--accent-amber)';
+      status.innerText = 'Limpiando bases de datos…';
+      try {
+        const res = await fetch('/api/wipe-dbs', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({})
+        });
+        const data = await res.json();
+        status.style.color = 'var(--accent-emerald)';
+        status.innerText = '✅ ' + (data.message || 'BDs limpiadas.');
+        document.getElementById('val-total-read').innerText = '0';
+        document.getElementById('val-total-inserted').innerText = '0';
+        document.getElementById('stat-accounts').innerText = '0';
+      } catch (err) {
+        status.style.color = 'var(--accent-rose)';
+        status.innerText = 'Error limpiando BDs: ' + err;
+      }
+    }
+
+    async function runSeed() {
+      return seedDataset(selectedSeedPercent);
+    }
+
     async function seedDataset(percent) {
+      const status = document.getElementById('seed-status');
+      status.style.color = 'var(--accent-amber)';
+      status.innerText = `Ejecutando seed al ${percent}% con el CSV activo… (puede tardar)`;
       try {
         const res = await fetch('/api/seed', {
           method: 'POST',
@@ -1129,25 +1329,36 @@
           body: JSON.stringify({percent: percent})
         });
         const data = await res.json();
-        
+        if (data.error) throw new Error(data.error);
+
         document.getElementById('val-total-read').innerText = data.total_read.toLocaleString();
         document.getElementById('val-total-inserted').innerText = data.total_inserted.toLocaleString();
         document.getElementById('val-total-discarded').innerText = data.discarded_count.toLocaleString();
-        
-        const rate = (data.discarded_count / data.total_read) * 100;
+        document.getElementById('stat-accounts').innerText = data.total_inserted.toLocaleString();
+
+        const rate = data.total_read ? (data.discarded_count / data.total_read) * 100 : 0;
         document.getElementById('val-discard-rate').innerText = rate.toFixed(2) + '%';
 
-        let html = data.discarded_sample.map(d => `
+        let html = (data.discarded_sample || []).map(d => `
           <tr>
             <td>Banco #${d.row.IdBanco || '?'}</td>
             <td class="mono">${d.row.NroCuenta || '?'}</td>
-            <td>${d.row.Nombres || ''} ${d.row.Apellidos || ''}</td>
+            <td>${d.row.Nombres || ''} ${d.row.Apellidos || ''}${d.row.Identificacion ? ' · CI:' + d.row.Identificacion : ''}</td>
             <td class="mono" style="color: var(--accent-rose);">${d.row.Saldo || 'vacio'}</td>
             <td style="color: var(--accent-amber); font-weight: 500;">${d.reason}</td>
           </tr>
         `).join('');
         document.getElementById('discarded-rows-tbody').innerHTML = html || '<tr><td colspan="5">Sin registros descartados.</td></tr>';
+        status.style.color = 'var(--accent-emerald)';
+        const perf = data.performance || {};
+        status.innerText = `✅ Seed OK: ${data.total_inserted} cuentas desde ${data.dataset?.filename || data.csv_path}` +
+          (perf.peak_concurrent_workers != null
+            ? ` | multi-hilo pico ${perf.peak_concurrent_workers}/${perf.max_workers} · ${perf.throughput_accounts_per_sec}/s · ${perf.elapsed_seconds}s`
+            : '');
+        refreshDatasetInfo();
       } catch (err) {
+        status.style.color = 'var(--accent-rose)';
+        status.innerText = 'Error en seed: ' + err;
         alert('Error en re-sembrado: ' + err);
       }
     }
@@ -1191,7 +1402,7 @@
     // Auto-update BCB rate every 1s
     setInterval(fetchBcbRate, 1000);
     fetchBcbRate();
-    // No auto-seed al cargar: reseeding bloqueaba la sensación de "tiempo real".
+    refreshDatasetInfo();
   </script>
 </body>
 </html>

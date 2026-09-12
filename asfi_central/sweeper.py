@@ -102,7 +102,8 @@ class ParallelBankSweeper:
         """
         if reset_first:
             from databases.seed_data import seed_bank_databases_from_csv
-            seed_bank_databases_from_csv("01 - Practica 2 Dataset.csv", 0.01)
+            from databases.dataset_manager import get_active_dataset_path
+            seed_bank_databases_from_csv(get_active_dataset_path(), 0.01)
 
         rate_info = bcb_engine.get_current_rate()
         t0_timestamp = rate_info["timestamp"]

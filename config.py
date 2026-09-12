@@ -7,12 +7,16 @@ ASFI_PORT = 8200
 
 # Configuración del Banco Central de Bolivia (BCB)
 BCB_BASE_EXCHANGE_RATE = 6.9600  # Tipo de cambio base USD -> BOB
-BCB_UPDATE_INTERVAL_SECONDS = 3  # Fluctuación cada 3s para que se note en el dashboard
+BCB_UPDATE_INTERVAL_SECONDS = 5 # Fluctuación corta cada 5 segundos para pruebas y demostración dinámica en tiempo real
 BCB_MAX_VARIATION = 0.9999
 
 # Configuración ASFI
 ASFI_DB_PATH = "asfi_central.db"
 AUDIT_LOG_FILE = "asfi_audit.log"
+
+# Seed / ingesta del dataset CSV
+USE_FULL_DATASET = False          # True = 100% del CSV; False = usa SEED_SAMPLE_PERCENT
+SEED_SAMPLE_PERCENT = 1.0         # Porcentaje por defecto cuando no se pasa --percent / UI
 
 # Lista oficial de Entidades Financieras (Bancos), Algoritmos y Motores de BD
 BANKS = [

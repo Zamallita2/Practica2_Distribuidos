@@ -6,6 +6,7 @@ Supports: Relational (SQLite, MySQL, PostgreSQL schemas), NoSQL (Document/KV Sto
 import sqlite3
 import os
 import json
+import threading
 from config import BANKS
 from databases.banks_1_5 import (
     BankUnionSQLiteAdapter,
@@ -59,6 +60,7 @@ class BankDatabaseManager:
         self.data_dir = data_dir
         os.makedirs(self.data_dir, exist_ok=True)
         self.graph_dbs = {} # Graph DB storage for Bank 5
+        self.nosql_locks = {b_id: threading.Lock() for b_id in range(1, 15)}
         self.banks_1_5 = {
             b_id: adapter_cls(data_dir=self.data_dir)
             for b_id, adapter_cls in BANKS_1_5_ADAPTER_CLASSES.items()
@@ -121,25 +123,30 @@ class BankDatabaseManager:
             G.add_edge(client_node, account_node, relation="POSEE_CUENTA")
 
         elif "MongoDB" in b_info["db_engine"] or "JSON" in b_info["db_engine"]:
-            # NoSQL Document Store
-            json_path = os.path.join(self.data_dir, f"bank_{bank_id}_nosql.json")
-            data = []
-            if os.path.exists(json_path):
-                with open(json_path, "r") as f:
-                    data = json.load(f)
-            
-            # Upsert
-            data = [d for d in data if d["cuenta_id"] != cuenta_id]
-            data.append({
-                "cuenta_id": cuenta_id,
-                "cliente_nombre": cliente_nombre,
-                "saldo_usd_cifrado": saldo_cifrado,
-                "saldo_bs": 0.0,
-                "codigo_verificacion": "",
-                "fecha_conversion": ""
-            })
-            with open(json_path, "w") as f:
-                json.dump(data, f, indent=2)
+            # NoSQL Document Store (con lock de hilo)
+            lock = self.nosql_locks.get(bank_id, threading.Lock())
+            with lock:
+                json_path = os.path.join(self.data_dir, f"bank_{bank_id}_nosql.json")
+                data = []
+                if os.path.exists(json_path):
+                    try:
+                        with open(json_path, "r") as f:
+                            data = json.load(f)
+                    except (json.JSONDecodeError, ValueError):
+                        data = []
+                
+                # Upsert
+                data = [d for d in data if d["cuenta_id"] != cuenta_id]
+                data.append({
+                    "cuenta_id": cuenta_id,
+                    "cliente_nombre": cliente_nombre,
+                    "saldo_usd_cifrado": saldo_cifrado,
+                    "saldo_bs": 0.0,
+                    "codigo_verificacion": "",
+                    "fecha_conversion": ""
+                })
+                with open(json_path, "w") as f:
+                    json.dump(data, f, indent=2)
 
         else:
             # Relational Store
@@ -221,26 +228,28 @@ class BankDatabaseManager:
             return False
 
         elif "MongoDB" in b_info["db_engine"] or "JSON" in b_info["db_engine"]:
-            json_path = os.path.join(self.data_dir, f"bank_{bank_id}_nosql.json")
-            if os.path.exists(json_path):
-                try:
-                    with open(json_path, "r") as f:
-                        data = json.load(f)
-                except (json.JSONDecodeError, ValueError):
-                    data = []
-                found = False
-                for item in data:
-                    if item["cuenta_id"] == cuenta_id:
-                        item["saldo_bs"] = saldo_bs
-                        item["codigo_verificacion"] = verification_code
-                        item["fecha_conversion"] = timestamp
-                        found = True
-                if not found:
-                    return False
-                with open(json_path, "w") as f:
-                    json.dump(data, f, indent=2)
-                return True
-            return False
+            lock = self.nosql_locks.get(bank_id, threading.Lock())
+            with lock:
+                json_path = os.path.join(self.data_dir, f"bank_{bank_id}_nosql.json")
+                if os.path.exists(json_path):
+                    try:
+                        with open(json_path, "r") as f:
+                            data = json.load(f)
+                    except (json.JSONDecodeError, ValueError):
+                        data = []
+                    found = False
+                    for item in data:
+                        if item["cuenta_id"] == cuenta_id:
+                            item["saldo_bs"] = saldo_bs
+                            item["codigo_verificacion"] = verification_code
+                            item["fecha_conversion"] = timestamp
+                            found = True
+                    if not found:
+                        return False
+                    with open(json_path, "w") as f:
+                        json.dump(data, f, indent=2)
+                    return True
+                return False
 
         else:
             db_file = os.path.join(self.data_dir, f"bank_{bank_id}.db")

@@ -14,11 +14,17 @@ from http import HTTPStatus
 
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
-from config import BANKS, AUDIT_LOG_FILE
+from config import BANKS, AUDIT_LOG_FILE, ASFI_DB_PATH
 from bcb_service.rate_engine import bcb_engine
 from databases.seed_data import seed_bank_databases_from_csv
 from databases.bank_dbs import bank_db_manager
 from databases.asfi_db import asfi_db
+from databases.dataset_manager import (
+    get_dataset_info,
+    get_active_dataset_path,
+    save_uploaded_csv,
+    wipe_all_databases,
+)
 from asfi_central.sweeper import sweeper
 from asfi_central.cpu_monitor import cpu_monitor
 
@@ -69,8 +75,6 @@ class ASFIHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.send_response(status)
         self.send_header('Content-Type', 'application/json; charset=utf-8')
         self.send_header('Content-Length', str(len(body)))
-        self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
-        self.send_header('Pragma', 'no-cache')
         self.end_headers()
         self.wfile.write(body)
 
@@ -85,6 +89,8 @@ class ASFIHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                     content = f.read()
                 self.send_response(200)
                 self.send_header('Content-Type', 'text/html; charset=utf-8')
+                self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate')
+                self.send_header('Pragma', 'no-cache')
                 self.send_header('Content-Length', str(len(content)))
                 self.end_headers()
                 self.wfile.write(content)
@@ -107,6 +113,9 @@ class ASFIHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         elif path == '/api/cpu-stats':
             self.send_json(cpu_monitor.sample())
+
+        elif path == '/api/dataset':
+            self.send_json(get_dataset_info())
 
         elif path == '/api/banks':
             result = []
@@ -159,20 +168,63 @@ class ASFIHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                 pass
 
         if path == '/api/bcb-interval':
-            interval = int(payload.get("interval", 3))
+            interval = int(payload.get("interval", 5))
             if interval > 0:
                 bcb_engine.set_interval(interval)
             self.send_json({"success": True, "new_interval": bcb_engine.interval, "rate": bcb_engine.get_current_rate()})
 
-        elif path == '/api/bcb-tick':
-            new_rate = bcb_engine.force_tick()
-            self.send_json({"success": True, "current_rate": new_rate, "rate": bcb_engine.get_current_rate()})
-
         elif path == '/api/seed':
-            percent = float(payload.get("percent", 1.0))
-            sample_rate = percent / 100.0 if percent >= 1.0 else percent
-            stats = seed_bank_databases_from_csv("01 - Practica 2 Dataset.csv", sample_rate)
-            self.send_json({"success": True, **stats})
+            try:
+                percent = float(payload.get("percent", 1.0))
+                sample_rate = percent / 100.0 if percent >= 1.0 else percent
+                csv_path = payload.get("csv_path") or get_active_dataset_path()
+                if not os.path.exists(csv_path):
+                    self.send_json({"success": False, "error": f"CSV no encontrado: {csv_path}"}, status=HTTPStatus.BAD_REQUEST)
+                    return
+                stats = seed_bank_databases_from_csv(csv_path, sample_rate)
+                self.send_json({"success": True, "csv_path": csv_path, "dataset": get_dataset_info(), **stats})
+            except Exception as ex:
+                self.send_json({"success": False, "error": str(ex)}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
+
+        elif path == '/api/wipe-dbs':
+            try:
+                result = wipe_all_databases()
+                self.send_json(result)
+            except Exception as ex:
+                self.send_json({"success": False, "error": str(ex)}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
+
+        elif path == '/api/upload-csv':
+            try:
+                filename = self.headers.get('X-Filename', 'dataset.csv')
+                if not post_data:
+                    self.send_json({"success": False, "error": "Archivo vacío"}, status=HTTPStatus.BAD_REQUEST)
+                    return
+                info = save_uploaded_csv(filename, post_data)
+                self.send_json({"success": True, "dataset": info, "bytes": len(post_data)})
+            except Exception as ex:
+                self.send_json({"success": False, "error": str(ex)}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
+
+        elif path == '/api/query-asfi':
+            query_str = str(payload.get("query", "")).strip()
+            try:
+                import sqlite3
+                conn = sqlite3.connect(ASFI_DB_PATH)
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                sql = query_str if query_str else "SELECT * FROM Cuentas LIMIT 50;"
+                cursor.execute(sql)
+                if sql.lstrip().upper().startswith("SELECT") or not query_str:
+                    rows = cursor.fetchall()
+                    results = [dict(row) for row in rows]
+                    conn.close()
+                    self.send_json({"success": True, "db_type": "ASFI Central (SQLite)", "count": len(results), "results": results})
+                else:
+                    conn.commit()
+                    affected = cursor.rowcount
+                    conn.close()
+                    self.send_json({"success": True, "db_type": "ASFI Central (SQLite)", "count": affected, "results": [{"Mensaje": f"Consulta ejecutada con éxito. Filas afectadas: {affected}"}]})
+            except Exception as ex:
+                self.send_json({"error": str(ex)})
 
         elif path == '/api/query-bank':
             bank_id = int(payload.get("bank_id", 1))
@@ -255,12 +307,12 @@ class ASFIHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
 
                     elif bank_id == 4:
                         accounts = adapter.get_encrypted_accounts()
-                        self.send_json({"success": True, "db_type": "NoSQL (MongoDB Store)", "count": len(accounts), "results": accounts[:50]})
+                        self.send_json({"success": True, "db_type": "NoSQL (MongoDB Store)", "count": len(accounts), "results": accounts})
 
                     elif bank_id == 5:
                         accounts = adapter.get_encrypted_accounts()
                         results = []
-                        for acc in accounts[:50]:
+                        for acc in accounts:
                             results.append({
                                 "NodoCuentaID": acc.get("cuenta_id"),
                                 "Cliente": acc.get("cliente_nombre"),
@@ -278,7 +330,24 @@ class ASFIHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                     if os.path.exists(json_path):
                         with open(json_path, "r") as f:
                             data = json.load(f)
-                        self.send_json({"success": True, "db_type": "NoSQL (JSON Store)", "count": len(data), "results": data[:50]})
+
+                        filtered = data
+                        if query_str and not query_str.upper().startswith("SELECT * FROM") and not query_str.startswith("db."):
+                            q_lower = query_str.lower()
+                            # Soporta filtrado por subcadena o clave:valor
+                            if ":" in query_str:
+                                k, v = [x.strip() for x in query_str.split(":", 1)]
+                                filtered = [d for d in data if str(d.get(k, "")).lower() == v.lower()]
+                            elif "=" in query_str and "where" in q_lower:
+                                # Parsear cláusula WHERE básica ej: WHERE cuenta_id = 100123
+                                where_clause = query_str[q_lower.find("where")+5:].strip()
+                                if "=" in where_clause:
+                                    k, v = [x.strip(" '\"") for x in where_clause.split("=", 1)]
+                                    filtered = [d for d in data if str(d.get(k, "")).lower() == v.lower() or str(d.get("cuenta_id", "")).lower() == v.lower()]
+                            else:
+                                filtered = [d for d in data if q_lower in json.dumps(d).lower()]
+
+                        self.send_json({"success": True, "db_type": "NoSQL (JSON Store)", "count": len(filtered), "results": filtered})
                     else:
                         self.send_json({"error": f"Almacén NoSQL para Banco #{bank_id} no encontrado."})
 
@@ -292,7 +361,7 @@ class ASFIHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                         conn = sqlite3.connect(db_file)
                         conn.row_factory = sqlite3.Row
                         cursor = conn.cursor()
-                        cursor.execute(query_str if query_str else "SELECT * FROM CuentasBancarias LIMIT 20;")
+                        cursor.execute(query_str if query_str else "SELECT * FROM CuentasBancarias;")
                         if query_str.upper().startswith("SELECT") or not query_str:
                             rows = cursor.fetchall()
                             results = [dict(row) for row in rows]

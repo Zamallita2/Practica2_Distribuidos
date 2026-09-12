@@ -60,10 +60,17 @@ class ASFICentralDatabase:
                 ExchangeRate REAL NOT NULL CHECK(ExchangeRate > 0),
                 CuentaId BIGINT NOT NULL,
                 BancoId INTEGER NOT NULL,
+                CodigoVerificacion CHAR(8) DEFAULT '',
                 FOREIGN KEY (BancoId) REFERENCES Bancos(BancoId),
                 FOREIGN KEY (CuentaId) REFERENCES Cuentas(CuentaId)
             )
         """)
+
+        # Migración ligera por si la tabla ya existe sin la columna CodigoVerificacion
+        try:
+            cursor.execute("ALTER TABLE AuditLogs ADD COLUMN CodigoVerificacion CHAR(8) DEFAULT '';")
+        except sqlite3.OperationalError:
+            pass # Ya existe la columna
 
         # Poblar catálogo oficial de 14 bancos si está vacío
         cursor.execute("SELECT COUNT(*) FROM Bancos")
@@ -119,9 +126,9 @@ class ASFICentralDatabase:
 
             # Registrar log de auditoría
             cursor.execute("""
-                INSERT INTO AuditLogs (Timestamp, ExchangeRate, CuentaId, BancoId)
-                VALUES (?, ?, ?, ?)
-            """, (timestamp, exchange_rate, cuenta_id, banco_id))
+                INSERT INTO AuditLogs (Timestamp, ExchangeRate, CuentaId, BancoId, CodigoVerificacion)
+                VALUES (?, ?, ?, ?, ?)
+            """, (timestamp, exchange_rate, cuenta_id, banco_id, verification_code))
 
             conn.commit()
             conn.close()
@@ -154,7 +161,7 @@ class ASFICentralDatabase:
     def get_audit_logs(self, limit: int = 100):
         conn = self._get_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT LogId, Timestamp, ExchangeRate, CuentaId, BancoId FROM AuditLogs ORDER BY LogId DESC LIMIT ?", (limit,))
+        cursor.execute("SELECT LogId, Timestamp, ExchangeRate, CuentaId, BancoId, CodigoVerificacion FROM AuditLogs ORDER BY LogId DESC LIMIT ?", (limit,))
         rows = cursor.fetchall()
         conn.close()
         return rows
@@ -162,7 +169,7 @@ class ASFICentralDatabase:
     def get_audit_logs_by_bank(self, banco_id: int, limit: int = 50):
         conn = self._get_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT LogId, Timestamp, ExchangeRate, CuentaId, BancoId FROM AuditLogs WHERE BancoId = ? ORDER BY LogId DESC LIMIT ?", (banco_id, limit))
+        cursor.execute("SELECT LogId, Timestamp, ExchangeRate, CuentaId, BancoId, CodigoVerificacion FROM AuditLogs WHERE BancoId = ? ORDER BY LogId DESC LIMIT ?", (banco_id, limit))
         rows = cursor.fetchall()
         conn.close()
         return rows

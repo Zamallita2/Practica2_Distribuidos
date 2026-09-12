@@ -13,6 +13,7 @@ bloquear el desarrollo. El modo activo queda expuesto en `engine_mode`
 
 import os
 import json
+import threading
 
 try:
     from pymongo import MongoClient
@@ -38,6 +39,7 @@ class BankBCPMongoAdapter:
         self.engine_mode = "local_fallback"
         self._client = None
         self._collection = None
+        self._lock = threading.Lock()
         if HAS_PYMONGO:
             try:
                 client = MongoClient(MONGO_HOST, MONGO_PORT, serverSelectionTimeoutMS=2000)
@@ -54,14 +56,18 @@ class BankBCPMongoAdapter:
             self._collection.delete_many({})
             self._collection.create_index("cuenta_id", unique=True)
         else:
-            with open(self.fallback_path, "w") as f:
-                json.dump([], f)
+            with self._lock:
+                with open(self.fallback_path, "w") as f:
+                    json.dump([], f)
 
     def _load_fallback(self):
         if not os.path.exists(self.fallback_path):
             return []
-        with open(self.fallback_path, "r") as f:
-            return json.load(f)
+        try:
+            with open(self.fallback_path, "r") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, ValueError):
+            return []
 
     def _save_fallback(self, data):
         with open(self.fallback_path, "w") as f:
@@ -79,9 +85,10 @@ class BankBCPMongoAdapter:
         if self.engine_mode == "real":
             self._collection.update_one({"cuenta_id": cuenta_id}, {"$set": document}, upsert=True)
         else:
-            data = [d for d in self._load_fallback() if d["cuenta_id"] != cuenta_id]
-            data.append(document)
-            self._save_fallback(data)
+            with self._lock:
+                data = [d for d in self._load_fallback() if d["cuenta_id"] != cuenta_id]
+                data.append(document)
+                self._save_fallback(data)
 
     def get_encrypted_accounts(self):
         if self.engine_mode == "real":
@@ -95,7 +102,8 @@ class BankBCPMongoAdapter:
                 }
                 for doc in self._collection.find({}, {"_id": 0})
             ]
-        return self._load_fallback()
+        with self._lock:
+            return self._load_fallback()
 
     def update_verification_code(self, cuenta_id: int, saldo_bs: float, verification_code: str, timestamp: str) -> bool:
         if self.engine_mode == "real":
@@ -105,16 +113,17 @@ class BankBCPMongoAdapter:
             )
             return result.matched_count > 0
         else:
-            data = self._load_fallback()
-            updated = False
-            for item in data:
-                if item["cuenta_id"] == cuenta_id:
-                    item["saldo_bs"] = saldo_bs
-                    item["codigo_verificacion"] = verification_code
-                    item["fecha_conversion"] = timestamp
-                    updated = True
-            self._save_fallback(data)
-            return updated
+            with self._lock:
+                data = self._load_fallback()
+                updated = False
+                for item in data:
+                    if item["cuenta_id"] == cuenta_id:
+                        item["saldo_bs"] = saldo_bs
+                        item["codigo_verificacion"] = verification_code
+                        item["fecha_conversion"] = timestamp
+                        updated = True
+                self._save_fallback(data)
+                return updated
 
 
 if __name__ == "__main__":
