@@ -125,6 +125,32 @@ class BankBCPMongoAdapter:
                 self._save_fallback(data)
                 return updated
 
+    def bulk_update_verification_codes(self, updates: list) -> int:
+        """Una operación masiva Mongo/JSON en vez de reescribir por cuenta."""
+        if not updates:
+            return 0
+        if self.engine_mode == "real":
+            from pymongo import UpdateOne
+            operations = [
+                UpdateOne({"cuenta_id": account_id}, {"$set": {
+                    "saldo_bs": saldo_bs, "codigo_verificacion": code,
+                    "fecha_conversion": timestamp,
+                }})
+                for saldo_bs, code, timestamp, account_id in updates
+            ]
+            self._collection.bulk_write(operations, ordered=False)
+            return len(updates)
+
+        by_id = {account_id: (saldo_bs, code, timestamp) for saldo_bs, code, timestamp, account_id in updates}
+        with self._lock:
+            data = self._load_fallback()
+            for item in data:
+                change = by_id.get(item.get("cuenta_id"))
+                if change:
+                    item["saldo_bs"], item["codigo_verificacion"], item["fecha_conversion"] = change
+            self._save_fallback(data)
+        return len(updates)
+
 
 if __name__ == "__main__":
     adapter = BankBCPMongoAdapter()

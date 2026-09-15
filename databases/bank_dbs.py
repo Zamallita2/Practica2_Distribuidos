@@ -350,4 +350,61 @@ class BankDatabaseManager:
             conn.close()
             return updated
 
+    def bulk_update_verification_codes(self, bank_id: int, updates: list) -> int:
+        """Sincroniza un banco entero mediante una transacción/escritura por lote."""
+        if not updates:
+            return 0
+        if bank_id in self.banks_1_5:
+            adapter = self.banks_1_5[bank_id]
+            if hasattr(adapter, "bulk_update_verification_codes"):
+                return adapter.bulk_update_verification_codes(updates)
+            for saldo_bs, code, timestamp, cuenta_id in updates:
+                adapter.update_verification_code(cuenta_id, saldo_bs, code, timestamp)
+            return len(updates)
+
+        b_info = next((b for b in BANKS if b["id"] == bank_id), None)
+        if not b_info:
+            return 0
+        if b_info["db_engine"] == "NetworkX/Neo4j" or "Grafo" in b_info["db_type"]:
+            graph = self.graph_dbs.get(bank_id)
+            updated = 0
+            for saldo_bs, code, timestamp, cuenta_id in updates:
+                node = f"Account_{cuenta_id}"
+                if graph and node in graph:
+                    attrs = graph.nodes[node] if HAS_NETWORKX else graph.nodes_data[node]
+                    attrs.update(saldo_bs=saldo_bs, codigo_verificacion=code, fecha_conversion=timestamp)
+                    updated += 1
+            return updated
+        if "MongoDB" in b_info["db_engine"] or "JSON" in b_info["db_engine"]:
+            lock = self.nosql_locks.get(bank_id, threading.Lock())
+            changes = {account_id: (saldo_bs, code, timestamp) for saldo_bs, code, timestamp, account_id in updates}
+            with lock:
+                json_path = os.path.join(self.data_dir, f"bank_{bank_id}_nosql.json")
+                try:
+                    with open(json_path, "r") as f:
+                        data = json.load(f)
+                except (OSError, json.JSONDecodeError, ValueError):
+                    return 0
+                for item in data:
+                    change = changes.get(item.get("cuenta_id"))
+                    if change:
+                        item["saldo_bs"], item["codigo_verificacion"], item["fecha_conversion"] = change
+                with open(json_path, "w") as f:
+                    json.dump(data, f)
+            return len(updates)
+
+        db_file = os.path.join(self.data_dir, f"bank_{bank_id}.db")
+        conn = sqlite3.connect(db_file, timeout=30)
+        try:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            conn.executemany("""
+                UPDATE CuentasBancarias SET SaldoBs=?, CodigoVerificacion=?, FechaConversion=?
+                WHERE CuentaId=?
+            """, updates)
+            conn.commit()
+        finally:
+            conn.close()
+        return len(updates)
+
 bank_db_manager = BankDatabaseManager()

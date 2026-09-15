@@ -13,7 +13,8 @@ import os
 import time
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from config import BANKS
+from config import BANKS, ASFI_MAX_COMPUTE_WORKERS
+from databases.asfi_db import asfi_db
 from bcb_service.rate_engine import bcb_engine
 from asfi_central.process_engine import asfi_process_engine
 from databases.bank_dbs import bank_db_manager
@@ -73,8 +74,8 @@ class ParallelBankSweeper:
         except Exception as ex:
             return {"bank_id": bank_id, "success": False, "accounts": [], "error": str(ex)}
 
-    def _process_account_job(self, bank_id, acc, use_dynamic_rate, initial_rate, update_bank_db, metrics):
-        """Un cálculo de conversión en un worker del pool (prueba de multi-hilo)."""
+    def _process_account_batch(self, bank_id, accounts, use_dynamic_rate, initial_rate, metrics):
+        """Calcula un bloque sin tocar disco; el I/O se sincroniza después por lotes."""
         thread = threading.current_thread()
         with metrics["lock"]:
             metrics["active_workers"] += 1
@@ -82,18 +83,20 @@ class ParallelBankSweeper:
             metrics["worker_names"].add(thread.name)
             metrics["worker_idents"].add(thread.ident)
         try:
-            active_rate = None if use_dynamic_rate else initial_rate
-            return asfi_process_engine.process_bank_account_payload(
-                bank_id=bank_id,
-                account_data=acc,
-                exchange_rate=active_rate,
-                update_bank_db=update_bank_db,
-            )
+            return [
+                asfi_process_engine.prepare_bank_account_update(
+                    bank_id=bank_id,
+                    account_data=acc,
+                    exchange_rate=None if use_dynamic_rate else initial_rate,
+                )
+                for acc in accounts
+            ]
         finally:
             with metrics["lock"]:
                 metrics["active_workers"] -= 1
 
-    async def execute_parallel_sweep(self, use_dynamic_rate: bool = False, update_bank_db: bool = True, reset_first: bool = False):
+    async def execute_parallel_sweep(self, use_dynamic_rate: bool = False, update_bank_db: bool = True,
+                                     reset_first: bool = False, include_transactions: bool = True):
         """
         Ejecuta el barrido paralelo a los 14 bancos.
         - reset_first: Si es True, limpia y vuelve a cargar los saldos originales en Dólares en los bancos.
@@ -109,7 +112,7 @@ class ParallelBankSweeper:
         initial_rate = rate_info["current_rate"]
         start_time = time.time()
         cpu_cores = os.cpu_count() or 1
-        max_calc_workers = max(4, min(32, cpu_cores * 4))
+        max_calc_workers = min(max(1, ASFI_MAX_COMPUTE_WORKERS), cpu_cores)
 
         print(f"\n🚀 [BARRIDO PARALELO ASFI - TAREA 8] Iniciando extracción simultánea a los 14 bancos...")
         print(f"⏱️  Instante de Referencia (t₀): {t0_timestamp}")
@@ -127,7 +130,7 @@ class ParallelBankSweeper:
             raw_results = await asyncio.gather(*tasks, return_exceptions=True)
         fetch_elapsed = round(time.time() - fetch_start, 4)
 
-        # --- Fase 2: conversión multi-hilo (varios cálculos a la vez) ---
+        # --- Fase 2: cálculo multi-hilo, sin I/O por cuenta ---
         metrics = {
             "lock": threading.Lock(),
             "active_workers": 0,
@@ -141,6 +144,7 @@ class ParallelBankSweeper:
         all_transactions = []
         bank_summary = {}
         jobs = []
+        chunk_size = 500
 
         for idx, res in enumerate(raw_results, start=1):
             if isinstance(res, Exception):
@@ -162,19 +166,17 @@ class ParallelBankSweeper:
 
             successful_banks += 1
             bank_summary[bank_id] = {"success": True, "count": len(accounts), "error": None, "elapsed_seconds": 0}
-            for acc in accounts:
-                jobs.append((bank_id, acc))
+            for start in range(0, len(accounts), chunk_size):
+                jobs.append((bank_id, accounts[start:start + chunk_size]))
 
         process_start = time.time()
         threads_before = threading.active_count()
 
         with ThreadPoolExecutor(max_workers=max_calc_workers, thread_name_prefix="ASFI-Calc") as pool:
             futures = {
-                pool.submit(
-                    self._process_account_job,
-                    bank_id, acc, use_dynamic_rate, initial_rate, update_bank_db, metrics,
-                ): bank_id
-                for bank_id, acc in jobs
+                pool.submit(self._process_account_batch, bank_id, accounts,
+                            use_dynamic_rate, initial_rate, metrics): bank_id
+                for bank_id, accounts in jobs
             }
             threads_during = threading.active_count()
             bank_counts = {b["id"]: 0 for b in BANKS}
@@ -183,14 +185,56 @@ class ParallelBankSweeper:
             for fut in as_completed(futures):
                 bank_id = futures[fut]
                 try:
-                    tx = fut.result()
-                    all_transactions.append(tx)
-                    bank_counts[bank_id] = bank_counts.get(bank_id, 0) + 1
-                    total_processed += 1
+                    transactions = fut.result()
+                    all_transactions.extend(transactions)
+                    bank_counts[bank_id] = bank_counts.get(bank_id, 0) + len(transactions)
+                    total_processed += len(transactions)
                 except Exception as ex:
                     bank_errors[bank_id] = str(ex)
 
-        process_elapsed = round(time.time() - process_start, 4)
+        calculation_elapsed = round(time.time() - process_start, 4)
+
+        # --- Fase 3: persistencia por lote ---
+        persist_start = time.time()
+        asfi_db.record_transactions_bulk(all_transactions)
+
+        # Un append de archivo, no una llamada al logger por cada cuenta.
+        if all_transactions:
+            with open("asfi_audit.log", "a", encoding="utf-8") as audit_file:
+                audit_file.writelines(
+                    f"[AUDIT LOG] {tx['timestamp']} | Tasa: {tx['tipo_cambio']:.4f} | "
+                    f"CuentaId: {tx['cuenta_id']} | BancoId: {tx['banco_id']} | "
+                    f"HexVerif: {tx['codigo_verificacion']}\n"
+                    for tx in all_transactions
+                )
+
+        if update_bank_db:
+            updates_by_bank = {}
+            for tx in all_transactions:
+                updates_by_bank.setdefault(tx["banco_id"], []).append((
+                    tx["saldo_bs"], tx["codigo_verificacion"], tx["timestamp"], tx["cuenta_id"],
+                ))
+            # Los bancos son independientes: hasta 14 escrituras masivas concurrentes.
+            with ThreadPoolExecutor(max_workers=min(len(updates_by_bank), max_calc_workers),
+                                    thread_name_prefix="ASFI-Sync") as sync_pool:
+                sync_futures = {
+                    sync_pool.submit(bank_db_manager.bulk_update_verification_codes, bank_id, updates): bank_id
+                    for bank_id, updates in updates_by_bank.items()
+                }
+                for future in as_completed(sync_futures):
+                    bank_id = sync_futures[future]
+                    try:
+                        synced_count = future.result()
+                        # Todas las cuentas en un update exitoso de lote quedan sincronizadas.
+                        if synced_count:
+                            for tx in all_transactions:
+                                if tx["banco_id"] == bank_id:
+                                    tx["banco_sincronizado"] = True
+                    except Exception as ex:
+                        bank_errors[bank_id] = f"Error de sincronización masiva: {ex}"
+
+        persistence_elapsed = round(time.time() - persist_start, 4)
+        process_elapsed = round(calculation_elapsed + persistence_elapsed, 4)
         elapsed = round(time.time() - start_time, 4)
         throughput = round(total_processed / process_elapsed, 2) if process_elapsed > 0 else 0.0
 
@@ -213,10 +257,13 @@ class ParallelBankSweeper:
             "parallel_bank_fetch_tasks": len(BANKS),
             "fetch_elapsed_seconds": fetch_elapsed,
             "process_elapsed_seconds": process_elapsed,
+            "calculation_elapsed_seconds": calculation_elapsed,
+            "persistence_elapsed_seconds": persistence_elapsed,
+            "batch_size": chunk_size,
             "throughput_accounts_per_sec": throughput,
             "execution_model": (
                 f"asyncio.gather({len(BANKS)} bancos) + "
-                f"ThreadPoolExecutor(max_workers={max_calc_workers}) para conversiones concurrentes"
+                f"ThreadPoolExecutor(max_workers={max_calc_workers}) por bloques de {chunk_size} + persistencia masiva"
             ),
         }
 
@@ -235,7 +282,10 @@ class ParallelBankSweeper:
             "failed_banks": failed_banks,
             "exchange_rate": initial_rate,
             "bank_summary": bank_summary,
-            "transactions": all_transactions,
+            # El dashboard no necesita transportar 100% de las cuentas al navegador.
+            # Las pruebas/servicios internos sí pueden pedirlas explícitamente.
+            "transactions": all_transactions if include_transactions else all_transactions[:100],
+            "transactions_truncated": not include_transactions and len(all_transactions) > 100,
             "performance": performance,
         }
 

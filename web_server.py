@@ -461,7 +461,8 @@ class ASFIHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
             sweep_res = asyncio.run(sweeper.execute_parallel_sweep(
                 use_dynamic_rate=use_dynamic,
                 update_bank_db=update_db,
-                reset_first=reset_first
+                reset_first=reset_first,
+                include_transactions=False,
             ))
             self.send_json(sweep_res)
 

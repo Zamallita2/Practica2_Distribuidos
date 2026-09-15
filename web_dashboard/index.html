@@ -1080,7 +1080,9 @@
         document.getElementById('sweep-perf-detail').innerHTML = `
           <strong style="color: var(--accent-blue);">Modelo:</strong> ${perf.execution_model || 'N/D'}<br>
           <strong>Fetch paralelo (14 bancos):</strong> ${perf.fetch_elapsed_seconds ?? '—'}s &nbsp;|&nbsp;
-          <strong>Cálculo multi-hilo:</strong> ${perf.process_elapsed_seconds ?? '—'}s<br>
+          <strong>Cálculo multi-hilo:</strong> ${perf.calculation_elapsed_seconds ?? '—'}s &nbsp;|&nbsp;
+          <strong>Persistencia por lotes:</strong> ${perf.persistence_elapsed_seconds ?? '—'}s<br>
+          <strong>Tamaño de lote:</strong> ${perf.batch_size ?? '—'} cuentas &nbsp;|&nbsp;
           <strong>Workers observados:</strong> <span class="mono" style="color: var(--accent-amber);">${samples}</span>
         `;
 
@@ -1693,4 +1695,3 @@
   </script>
 </body>
 </html>
-

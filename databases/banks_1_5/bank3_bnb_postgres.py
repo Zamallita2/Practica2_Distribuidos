@@ -212,16 +212,41 @@ class BankBNBPostgresAdapter:
             conn.commit()
             conn.close()
             return updated
+        conn = self._connect_fallback()
+        cursor = conn.execute(
+            "UPDATE CuentasBancarias SET SaldoBs=?, CodigoVerificacion=?, FechaConversion=? WHERE CuentaId=?",
+            (saldo_bs, verification_code, timestamp, cuenta_id),
+        )
+        conn.commit()
+        updated = cursor.rowcount > 0
+        conn.close()
+        return updated
+
+    def bulk_update_verification_codes(self, updates: list) -> int:
+        if not updates:
+            return 0
+        if self.engine_mode == "real":
+            conn = self._connect_postgres()
+            try:
+                with conn.cursor() as cursor:
+                    cursor.executemany(
+                        "UPDATE CuentasBancarias SET SaldoBs=%s, CodigoVerificacion=%s, FechaConversion=%s WHERE CuentaId=%s",
+                        updates,
+                    )
+                conn.commit()
+            finally:
+                conn.close()
         else:
             conn = self._connect_fallback()
-            cursor = conn.execute(
-                "UPDATE CuentasBancarias SET SaldoBs=?, CodigoVerificacion=?, FechaConversion=? WHERE CuentaId=?",
-                (saldo_bs, verification_code, timestamp, cuenta_id),
-            )
-            conn.commit()
-            updated = cursor.rowcount > 0
-            conn.close()
-            return updated
+            try:
+                conn.executemany(
+                    "UPDATE CuentasBancarias SET SaldoBs=?, CodigoVerificacion=?, FechaConversion=? WHERE CuentaId=?",
+                    updates,
+                )
+                conn.commit()
+            finally:
+                conn.close()
+        return len(updates)
 
 
 if __name__ == "__main__":

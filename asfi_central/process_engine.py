@@ -34,11 +34,8 @@ class ASFICentralProcessEngine:
         """Genera un código alfanumérico hexadecimal único de 8 caracteres (0–9, A–F)."""
         return secrets.token_hex(4).upper()
 
-    def process_bank_account_payload(self, bank_id: int, account_data: dict, exchange_rate: float = None, update_bank_db: bool = True):
-        """
-        Procesa una cuenta bancaria individual: descifrado, conversión, código hex,
-        persistencia en ASFI DB, sincronización opcional con el banco y registro de auditoría.
-        """
+    def prepare_bank_account_update(self, bank_id: int, account_data: dict, exchange_rate: float = None):
+        """Descifra/convierte una cuenta sin I/O; seguro para workers concurrentes."""
         if exchange_rate is None:
             exchange_rate = bcb_engine.get_current_rate()["current_rate"]
 
@@ -64,32 +61,6 @@ class ASFICentralProcessEngine:
         verification_code = self.generate_verification_code()
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        # 4. Registrar en Base de Datos Central ASFI y Tabla AuditLogs
-        asfi_db.record_transaction(
-            cuenta_id=cuenta_id,
-            banco_id=bank_id,
-            saldo_usd=saldo_usd,
-            saldo_bs=saldo_bs,
-            exchange_rate=exchange_rate,
-            verification_code=verification_code,
-            timestamp=timestamp
-        )
-
-        # 5. Escribir registro en archivo de auditoría física asfi_audit.log
-        audit_log_msg = f"{exchange_rate:.4f} | CuentaId: {cuenta_id} | BancoId: {bank_id} | HexVerif: {verification_code}"
-        audit_logger.info(audit_log_msg)
-
-        # 6. Sincronizar y actualizar el saldo en la base de datos del banco correspondiente (si está activado)
-        synced = False
-        if update_bank_db:
-            synced = bank_db_manager.update_verification_code(
-                bank_id=bank_id,
-                cuenta_id=cuenta_id,
-                saldo_bs=saldo_bs,
-                verification_code=verification_code,
-                timestamp=timestamp
-            )
-
         return {
             "cuenta_id": cuenta_id,
             "banco_id": bank_id,
@@ -98,8 +69,37 @@ class ASFICentralProcessEngine:
             "tipo_cambio": exchange_rate,
             "codigo_verificacion": verification_code,
             "timestamp": timestamp,
-            "banco_sincronizado": synced
+            "banco_sincronizado": False,
         }
+
+    def process_bank_account_payload(self, bank_id: int, account_data: dict, exchange_rate: float = None, update_bank_db: bool = True):
+        """API individual conservada para usos externos y pruebas existentes."""
+        transaction = self.prepare_bank_account_update(bank_id, account_data, exchange_rate)
+
+        # Registrar en Base de Datos Central ASFI y Tabla AuditLogs
+        asfi_db.record_transaction(
+            cuenta_id=transaction["cuenta_id"], banco_id=transaction["banco_id"],
+            saldo_usd=transaction["saldo_usd"], saldo_bs=transaction["saldo_bs"],
+            exchange_rate=transaction["tipo_cambio"],
+            verification_code=transaction["codigo_verificacion"], timestamp=transaction["timestamp"]
+        )
+
+        # 5. Escribir registro en archivo de auditoría física asfi_audit.log
+        audit_log_msg = (f"{transaction['tipo_cambio']:.4f} | CuentaId: {transaction['cuenta_id']} | "
+                         f"BancoId: {transaction['banco_id']} | HexVerif: {transaction['codigo_verificacion']}")
+        audit_logger.info(audit_log_msg)
+
+        # 6. Sincronizar y actualizar el saldo en la base de datos del banco correspondiente (si está activado)
+        synced = False
+        if update_bank_db:
+            synced = bank_db_manager.update_verification_code(
+                bank_id=transaction["banco_id"], cuenta_id=transaction["cuenta_id"],
+                saldo_bs=transaction["saldo_bs"], verification_code=transaction["codigo_verificacion"],
+                timestamp=transaction["timestamp"]
+            )
+
+        transaction["banco_sincronizado"] = synced
+        return transaction
 
     def run_full_orchestration_cycle(self):
         """
@@ -147,4 +147,3 @@ class ASFICentralProcessEngine:
         }
 
 asfi_process_engine = ASFICentralProcessEngine()
-

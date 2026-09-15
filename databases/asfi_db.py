@@ -133,6 +133,41 @@ class ASFICentralDatabase:
             conn.commit()
             conn.close()
 
+    def record_transactions_bulk(self, transactions: list) -> int:
+        """Guarda cuentas y auditoría en una sola transacción SQLite."""
+        if not transactions:
+            return 0
+        cuentas = [
+            (t["cuenta_id"], t["banco_id"], t["saldo_usd"], t["saldo_bs"],
+             t["timestamp"], t["codigo_verificacion"])
+            for t in transactions
+        ]
+        logs = [
+            (t["timestamp"], t["tipo_cambio"], t["cuenta_id"], t["banco_id"],
+             t["codigo_verificacion"])
+            for t in transactions
+        ]
+        with self._write_lock:
+            conn = self._get_connection()
+            try:
+                cursor = conn.cursor()
+                cursor.executemany("""
+                    INSERT INTO Cuentas (CuentaId, BancoId, SaldoUSD, SaldoBs, FechaConversion, CodigoVerificacion)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(CuentaId) DO UPDATE SET
+                        BancoId=excluded.BancoId, SaldoUSD=excluded.SaldoUSD,
+                        SaldoBs=excluded.SaldoBs, FechaConversion=excluded.FechaConversion,
+                        CodigoVerificacion=excluded.CodigoVerificacion
+                """, cuentas)
+                cursor.executemany("""
+                    INSERT INTO AuditLogs (Timestamp, ExchangeRate, CuentaId, BancoId, CodigoVerificacion)
+                    VALUES (?, ?, ?, ?, ?)
+                """, logs)
+                conn.commit()
+            finally:
+                conn.close()
+        return len(transactions)
+
     def get_all_accounts(self):
         conn = self._get_connection()
         cursor = conn.cursor()
@@ -175,4 +210,3 @@ class ASFICentralDatabase:
         return rows
 
 asfi_db = ASFICentralDatabase()
-

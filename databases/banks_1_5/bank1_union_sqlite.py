@@ -88,6 +88,22 @@ class BankUnionSQLiteAdapter:
         conn.close()
         return updated
 
+    def bulk_update_verification_codes(self, updates: list) -> int:
+        if not updates:
+            return 0
+        conn = self._connect()
+        try:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            conn.executemany("""
+                UPDATE CuentasBancarias SET SaldoBs=?, CodigoVerificacion=?, FechaConversion=?
+                WHERE CuentaId=?
+            """, updates)
+            conn.commit()
+        finally:
+            conn.close()
+        return len(updates)
+
 
 if __name__ == "__main__":
     adapter = BankUnionSQLiteAdapter()

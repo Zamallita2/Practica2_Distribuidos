@@ -18,6 +18,12 @@ AUDIT_LOG_FILE = "asfi_audit.log"
 USE_FULL_DATASET = False          # True = 100% del CSV; False = usa SEED_SAMPLE_PERCENT
 SEED_SAMPLE_PERCENT = 1.0         # Porcentaje por defecto cuando no se pasa --percent / UI
 
+# Deja un núcleo libre para el SO/dashboard. Ajustable por variable de entorno.
+ASFI_MAX_COMPUTE_WORKERS = max(
+    1,
+    int(os.environ.get("ASFI_MAX_COMPUTE_WORKERS", max(1, (os.cpu_count() or 2) - 1))),
+)
+
 # Lista oficial de Entidades Financieras (Bancos), Algoritmos y Motores de BD
 BANKS = [
     {

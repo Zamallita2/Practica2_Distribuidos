@@ -176,8 +176,24 @@ class BankBISAGraphAdapter:
         self._persist()
         return True
 
+    def bulk_update_verification_codes(self, updates: list) -> int:
+        if not updates:
+            return 0
+        updated = 0
+        for saldo_bs, verification_code, timestamp, cuenta_id in updates:
+            account_node = f"Cuenta_{cuenta_id}"
+            if account_node not in self.graph:
+                continue
+            node = self.graph.nodes[account_node] if HAS_NETWORKX else self.graph.nodes_data[account_node]
+            node["saldo_bs"] = saldo_bs
+            node["codigo_verificacion"] = verification_code
+            node["fecha_conversion"] = timestamp
+            updated += 1
+        if updated:
+            self._persist()
+        return updated
+
 
 if __name__ == "__main__":
     adapter = BankBISAGraphAdapter()
     print(f"Banco BISA S.A. (Grafo NetworkX) -> esquema creado en '{adapter.graph_path}' [engine_mode={adapter.engine_mode}]")
-
