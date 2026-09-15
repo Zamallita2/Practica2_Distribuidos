@@ -171,12 +171,21 @@ class ASFIHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json(distributed_master.get_status())
 
         elif path == '/api/distributed/workers':
-            # Devuelve solo la lista de workers detectados
+            # Devuelve solo la lista de workers detectados (sin escanear)
             status = distributed_master.get_status()
             self.send_json({
                 "workers": status.get("workers", []),
                 "session_status": status.get("status", "idle")
             })
+
+        elif path == '/api/distributed/scan':
+            # Solo escanear la LAN y guardar los workers — sin distribuir nada
+            def _bg_scan():
+                _ensure_local_worker()
+                distributed_master.scan_lan_for_workers(include_self=True)
+            import threading as _t
+            _t.Thread(target=_bg_scan, daemon=True, name="LAN-Scan").start()
+            self.send_json({"success": True, "message": "Escaneo iniciado en background"})
 
         else:
             self.send_error(404, "Endpoint not found")
@@ -409,13 +418,20 @@ class ASFIHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                 csv_path = payload.get("csv_path") or get_active_dataset_path()
                 sample_rate_pct = float(payload.get("percent", 100.0))
                 sample_rate = sample_rate_pct / 100.0 if sample_rate_pct > 1.0 else sample_rate_pct
-                scan_lan = bool(payload.get("scan_lan", True))
+                # scan_lan: solo si no hay workers ya detectados
+                scan_lan = bool(payload.get("scan_lan", len(distributed_master.workers) == 0))
                 _ensure_local_worker()  # Asegura que el worker local esté corriendo
-                # Lanzar la distribución en un hilo de fondo para no bloquear HTTP
                 def _bg_distribute():
-                    distributed_master.start_distribution(csv_path, sample_rate, scan_lan)
+                    distributed_master.start_distribution(csv_path, sample_rate, scan_lan=scan_lan)
                 _threading.Thread(target=_bg_distribute, daemon=True, name="Distributor").start()
-                self.send_json({"success": True, "message": "Distribución iniciada", "csv_path": csv_path, "sample_rate": sample_rate})
+                self.send_json({
+                    "success": True,
+                    "message": "Distribución iniciada",
+                    "csv_path": csv_path,
+                    "sample_rate": sample_rate,
+                    "workers_known": distributed_master.workers,
+                    "will_scan": scan_lan
+                })
             except Exception as ex:
                 self.send_json({"success": False, "error": str(ex)}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
 

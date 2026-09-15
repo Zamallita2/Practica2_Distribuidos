@@ -742,57 +742,70 @@
         <div class="card-title"><span>🌐 Distribución de Carga por LAN</span>
           <span id="dist-session-badge" style="font-size:12px;padding:2px 10px;border-radius:12px;background:rgba(100,100,100,0.2);color:var(--text-muted)">idle</span>
         </div>
-        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.6">
-          El Maestro divide el CSV en mini-archivos por banco y los distribuye entre los workers
-          detectados en la red local. Siempre incluye al nodo local como worker. Ejecutar
-          <code style="background:rgba(255,255,255,0.07);padding:1px 6px;border-radius:4px">python -m distributed.worker_server</code>
-          en otras PCs de la red para sumar potencia.
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px;line-height:1.6">
+          En otra PC de la red, ejecutar primero:
+          <code style="background:rgba(255,255,255,0.07);padding:2px 8px;border-radius:4px;font-size:12px">python3 -m distributed.worker_server --master-ip <TU_IP></code>
+          Luego sigue los pasos:
         </p>
 
-        <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin-bottom:16px">
-          <div style="flex:1;min-width:160px">
-            <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:6px">% del Dataset a cargar</label>
-            <input id="dist-percent" type="number" min="1" max="100" value="100"
-              style="width:100%;background:rgba(255,255,255,0.07);border:1px solid var(--border-color);border-radius:8px;padding:10px 14px;color:var(--text-main);font-size:15px;font-family:inherit">
+        <!-- PASO 1: Escanear -->
+        <div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:20px;padding:16px;background:rgba(56,189,248,0.05);border:1px solid rgba(56,189,248,0.15);border-radius:12px">
+          <div style="background:rgba(56,189,248,0.15);color:var(--accent-blue);font-weight:800;font-size:18px;min-width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0">1</div>
+          <div style="flex:1">
+            <div style="font-size:14px;font-weight:600;margin-bottom:4px">Escanear la Red</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Detecta qué PCs están disponibles como workers en tu red local. Incluye siempre este nodo.</div>
+            <button id="dist-scan-btn" class="btn-primary" onclick="scanWorkers()" style="padding:10px 20px;font-size:14px">
+              🔍 Escanear Red
+            </button>
+            <span id="dist-scan-status" style="margin-left:12px;font-size:12px;color:var(--text-muted)"></span>
           </div>
-          <div style="flex:1;min-width:160px">
-            <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:6px">Escanear LAN automáticamente</label>
-            <select id="dist-scan-lan"
-              style="width:100%;background:rgba(255,255,255,0.07);border:1px solid var(--border-color);border-radius:8px;padding:10px 14px;color:var(--text-main);font-size:15px;font-family:inherit">
-              <option value="true">✅ Sí (recomendado)</option>
-              <option value="false">❌ No (solo local)</option>
-            </select>
-          </div>
-          <button id="dist-start-btn" class="btn-primary" onclick="startDistribution()" style="padding:11px 24px;font-size:15px">
-            🚀 Iniciar Distribución
-          </button>
-          <button class="btn-sm" onclick="stopDistribution()" style="padding:11px 18px;background:rgba(244,63,94,0.15);border-color:rgba(244,63,94,0.4);color:#f87171">
-            ⏹ Detener
-          </button>
-          <button class="btn-sm" onclick="loadDistributedStatus()" style="padding:11px 18px">
-            🔄 Actualizar
-          </button>
         </div>
 
         <!-- Workers detectados -->
-        <div style="margin-bottom:16px">
-          <div style="font-size:13px;font-weight:600;color:var(--text-muted);margin-bottom:8px">📡 Workers en la Red</div>
+        <div style="margin-bottom:20px;padding:14px 16px;background:rgba(255,255,255,0.03);border-radius:10px;border:1px solid var(--border-color)">
+          <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px">📡 Workers Detectados</div>
           <div id="dist-workers-list" style="display:flex;flex-wrap:wrap;gap:8px">
-            <span style="color:var(--text-muted);font-size:13px">—</span>
+            <span style="color:var(--text-muted);font-size:13px">— Presiona "Escanear Red" primero</span>
+          </div>
+        </div>
+
+        <!-- PASO 2: Cargar -->
+        <div style="display:flex;align-items:flex-start;gap:16px;padding:16px;background:rgba(16,185,129,0.05);border:1px solid rgba(16,185,129,0.15);border-radius:12px">
+          <div style="background:rgba(16,185,129,0.15);color:var(--accent-emerald);font-weight:800;font-size:18px;min-width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0">2</div>
+          <div style="flex:1">
+            <div style="font-size:14px;font-weight:600;margin-bottom:4px">Distribuir y Cargar</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">El maestro divide el CSV por banco y le asigna a cada worker qué bases de datos llenar y con qué datos.</div>
+            <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+              <div>
+                <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px">% del dataset</label>
+                <input id="dist-percent" type="number" min="1" max="100" value="100"
+                  style="width:100px;background:rgba(255,255,255,0.07);border:1px solid var(--border-color);border-radius:8px;padding:8px 12px;color:var(--text-main);font-size:15px;font-family:inherit">
+              </div>
+              <button id="dist-start-btn" class="btn-primary" onclick="startDistribution()" style="padding:10px 22px;font-size:14px;background:linear-gradient(135deg,#10b981,#059669)">
+                🚀 Cargar y Distribuir
+              </button>
+              <button class="btn-sm" onclick="stopDistribution()" style="padding:10px 16px;background:rgba(244,63,94,0.15);border-color:rgba(244,63,94,0.4);color:#f87171">
+                ⏹ Detener
+              </button>
+              <button class="btn-sm" onclick="loadDistributedStatus()" style="padding:10px 14px">
+                🔄 Estado
+              </button>
+            </div>
           </div>
         </div>
 
         <!-- Barra de progreso global -->
-        <div id="dist-progress-wrap" style="display:none;margin-bottom:16px">
+        <div id="dist-progress-wrap" style="display:none;margin-top:16px">
           <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-muted);margin-bottom:4px">
             <span>Progreso global</span>
             <span id="dist-progress-pct">0%</span>
           </div>
           <div style="background:rgba(255,255,255,0.06);border-radius:8px;height:10px;overflow:hidden">
-            <div id="dist-progress-bar" style="height:100%;width:0%;background:linear-gradient(90deg,var(--accent-blue),var(--accent-indigo));border-radius:8px;transition:width 0.4s ease"></div>
+            <div id="dist-progress-bar" style="height:100%;width:0%;background:linear-gradient(90deg,var(--accent-emerald),var(--accent-blue));border-radius:8px;transition:width 0.4s ease"></div>
           </div>
         </div>
       </div>
+
 
       <!-- Tabla de tareas -->
       <div class="card">
@@ -1524,6 +1537,7 @@
       try {
         const r = await fetch('/api/distributed/status');
         const data = await r.json();
+        distributed_master_status = data;  // guardar para que scanWorkers() lo pueda leer
         renderDistributedStatus(data);
       } catch(e) {
         console.warn('dist status error', e);
@@ -1606,16 +1620,49 @@
         </tr>`).join('');
     }
 
+    async function scanWorkers() {
+      const btn = document.getElementById('dist-scan-btn');
+      const statusEl = document.getElementById('dist-scan-status');
+      if (btn) { btn.disabled = true; btn.textContent = '⏳ Escaneando...'; }
+      if (statusEl) statusEl.textContent = 'Buscando dispositivos en la red...';
+      try {
+        // Lanzar el escaneo en background
+        await fetch('/api/distributed/scan', {method: 'GET'});
+        // Esperar 2s y luego ir actualizando hasta que aparezcan workers
+        let attempts = 0;
+        const poll = setInterval(async () => {
+          attempts++;
+          await loadDistributedStatus();
+          const status = distributed_master_status;
+          if (status && status.workers && status.workers.length > 0) {
+            clearInterval(poll);
+            if (statusEl) statusEl.textContent = `✅ ${status.workers.length} worker(s) encontrado(s)`;
+          } else if (attempts >= 20) {
+            clearInterval(poll);
+            if (statusEl) statusEl.textContent = '⚠️ Solo se detectó el nodo local';
+          } else {
+            if (statusEl) statusEl.textContent = `🔍 Escaneando... (${attempts * 0.8 | 0}s)`;
+          }
+        }, 800);
+      } catch(e) {
+        if (statusEl) statusEl.textContent = '❌ Error: ' + e;
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '🔍 Escanear Red'; }
+      }
+    }
+
+    let distributed_master_status = null;
+
     async function startDistribution() {
       const percent = parseFloat(document.getElementById('dist-percent').value) || 100;
-      const scanLan = document.getElementById('dist-scan-lan').value === 'true';
       const btn = document.getElementById('dist-start-btn');
-      if (btn) { btn.disabled = true; btn.textContent = '⏳ Iniciando...'; }
+      if (btn) { btn.disabled = true; btn.textContent = '⏳ Distribuyendo...'; }
       try {
         const r = await fetch('/api/distributed/start', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({percent, scan_lan: scanLan})
+          // scan_lan: false → ya se escaneó en el Paso 1; si no hay workers conocidos, el backend re-escanea automáticamente
+          body: JSON.stringify({percent, scan_lan: false})
         });
         const data = await r.json();
         if (data.success) {
@@ -1627,7 +1674,7 @@
       } catch(e) {
         alert('Error de conexión: ' + e);
       } finally {
-        if (btn) { btn.disabled = false; btn.textContent = '🚀 Iniciar Distribución'; }
+        if (btn) { btn.disabled = false; btn.textContent = '🚀 Cargar y Distribuir'; }
       }
     }
 
