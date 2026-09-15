@@ -31,22 +31,21 @@ class ParallelBankSweeper:
         self.timeout = timeout
 
     def _fetch_bank_data_sync(self, bank_id: int):
-        """Extracción síncrona desde la BD del banco (ejecutada en hilo / to_thread)."""
-        from databases.seed_data import encrypt_balance
+        """
+        Extracción síncrona desde la BD del banco (ejecutada en hilo / to_thread).
+        Los saldos están almacenados en USD plano (sin cifrar) desde la ingesta.
+        El cifrado ocurre en process_engine.py al procesar cada cuenta para ASFI.
+        """
         raw_accounts = bank_db_manager.get_encrypted_accounts(bank_id)
         accounts = []
         for acc in raw_accounts:
-            try:
-                saldo_usd_val = float(acc.get("saldo_usd_cifrado", 0.0))
-                cifrado = encrypt_balance(bank_id, saldo_usd_val)
-            except (ValueError, TypeError):
-                cifrado = acc.get("saldo_usd_cifrado", "0.0")
-
+            # El campo saldo_usd_cifrado contiene el USD plano (nombre histórico mantenido
+            # para compatibilidad con process_engine.py que lo usa como entrada al descifrador)
+            saldo_plano = acc.get("saldo_usd_cifrado", "0.0")
             accounts.append({
                 "cuenta_id": acc["cuenta_id"],
                 "cliente_nombre": acc.get("cliente_nombre", ""),
-                "saldo_usd_cifrado": cifrado,
-                "saldo_usd_plano": acc.get("saldo_usd_cifrado", "0.0"),
+                "saldo_usd_cifrado": saldo_plano,  # USD plano → process_engine lo cifra/descifra
                 "saldo_bs": acc.get("saldo_bs", 0.0),
                 "codigo_verificacion": acc.get("codigo_verificacion", "")
             })

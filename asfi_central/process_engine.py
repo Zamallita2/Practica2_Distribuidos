@@ -43,13 +43,19 @@ class ASFICentralProcessEngine:
             exchange_rate = bcb_engine.get_current_rate()["current_rate"]
 
         cuenta_id = account_data["cuenta_id"]
-        saldo_cifrado = account_data["saldo_usd_cifrado"]
+        saldo_raw = account_data["saldo_usd_cifrado"]
 
-        # 1. Descifrar saldo USD usando el algoritmo específico del banco
+        # 1. Obtener el saldo USD
+        # El saldo está almacenado en plano (sin cifrar) desde la ingesta local.
+        # Se intenta parsear directamente como float; si falla (dato legado cifrado),
+        # se usa el descifrador del banco como fallback para retrocompatibilidad.
         try:
-            saldo_usd = decrypt_balance(bank_id, saldo_cifrado)
-        except Exception as e:
-            raise ValueError(f"Error al descifrar cuenta {cuenta_id} de Banco {bank_id}: {str(e)}")
+            saldo_usd = float(saldo_raw)
+        except (ValueError, TypeError):
+            try:
+                saldo_usd = decrypt_balance(bank_id, saldo_raw)
+            except Exception as e:
+                raise ValueError(f"Error al leer saldo de cuenta {cuenta_id} de Banco {bank_id}: {str(e)}")
 
         # 2. Convertir a bolivianos (Bs.) con 4 decimales de precisión
         saldo_bs = round(saldo_usd * exchange_rate, 4)

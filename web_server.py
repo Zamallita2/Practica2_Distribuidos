@@ -27,6 +27,22 @@ from databases.dataset_manager import (
 )
 from asfi_central.sweeper import sweeper
 from asfi_central.cpu_monitor import cpu_monitor
+from distributed.master_server import distributed_master
+from distributed.worker_server import start_worker as start_distributed_worker
+import threading as _threading
+
+# Iniciar worker local en background (permite modo single-node sin configuración adicional)
+_local_worker_started = False
+def _ensure_local_worker():
+    global _local_worker_started
+    if not _local_worker_started:
+        _local_worker_started = True
+        _threading.Thread(
+            target=start_distributed_worker,
+            kwargs={"master_ip": "127.0.0.1"},
+            daemon=True,
+            name="LocalWorker"
+        ).start()
 
 PORT = 8080
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "web_dashboard")
@@ -150,6 +166,17 @@ class ASFIHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                     "hex_code": row[5] if len(row) > 5 else ""
                 })
             self.send_json(formatted)
+
+        elif path == '/api/distributed/status':
+            self.send_json(distributed_master.get_status())
+
+        elif path == '/api/distributed/workers':
+            # Devuelve solo la lista de workers detectados
+            status = distributed_master.get_status()
+            self.send_json({
+                "workers": status.get("workers", []),
+                "session_status": status.get("status", "idle")
+            })
 
         else:
             self.send_error(404, "Endpoint not found")
@@ -376,6 +403,31 @@ class ASFIHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                         self.send_json({"error": f"Base de datos SQLite del Banco #{bank_id} no existe en disco."})
             except Exception as ex:
                 self.send_json({"error": str(ex)})
+
+        elif path == '/api/distributed/start':
+            try:
+                csv_path = payload.get("csv_path") or get_active_dataset_path()
+                sample_rate_pct = float(payload.get("percent", 100.0))
+                sample_rate = sample_rate_pct / 100.0 if sample_rate_pct > 1.0 else sample_rate_pct
+                scan_lan = bool(payload.get("scan_lan", True))
+                _ensure_local_worker()  # Asegura que el worker local esté corriendo
+                # Lanzar la distribución en un hilo de fondo para no bloquear HTTP
+                def _bg_distribute():
+                    distributed_master.start_distribution(csv_path, sample_rate, scan_lan)
+                _threading.Thread(target=_bg_distribute, daemon=True, name="Distributor").start()
+                self.send_json({"success": True, "message": "Distribución iniciada", "csv_path": csv_path, "sample_rate": sample_rate})
+            except Exception as ex:
+                self.send_json({"success": False, "error": str(ex)}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
+
+        elif path == '/api/distributed/stop':
+            try:
+                with distributed_master._lock:
+                    distributed_master.status = "idle"
+                    distributed_master.tasks = {}
+                    distributed_master._task_queue = []
+                self.send_json({"success": True, "message": "Sesión distribuida detenida"})
+            except Exception as ex:
+                self.send_json({"success": False, "error": str(ex)}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
 
         elif path == '/api/run-sweep':
             use_dynamic = payload.get("dynamic_rate", True)
