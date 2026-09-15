@@ -160,6 +160,86 @@ class BankDatabaseManager:
             conn.commit()
             conn.close()
 
+    def bulk_insert_accounts(self, bank_id: int, records: list):
+        """
+        Inserción masiva en lote — MUCHO más rápida que insert_encrypted_account() en bucle.
+        records: lista de (cuenta_id, cliente_nombre, saldo_cifrado)
+
+        - SQLite : una conexión, WAL, executemany(), un solo commit.
+        - JSON   : carga UNA vez, añade todos, escribe UNA vez (sin indent).
+        - Grafo  : añade todos los nodos en bloque sin I/O.
+        - Bancos 1-5: llama al adaptador individual (sin cambios).
+        """
+        if not records:
+            return 0
+
+        if bank_id in self.banks_1_5:
+            for cuenta_id, cliente_nombre, saldo_cifrado in records:
+                self.banks_1_5[bank_id].insert_encrypted_account(cuenta_id, cliente_nombre, saldo_cifrado)
+            return len(records)
+
+        b_info = next((b for b in BANKS if b["id"] == bank_id), None)
+        if not b_info:
+            return 0
+
+        inserted = 0
+
+        if b_info["db_engine"] == "NetworkX/Neo4j" or "Grafo" in b_info["db_type"]:
+            G = self.graph_dbs[bank_id]
+            for cuenta_id, cliente_nombre, saldo_cifrado in records:
+                client_node = f"Client_{cliente_nombre.replace(' ', '_')}"
+                account_node = f"Account_{cuenta_id}"
+                G.add_node(client_node, type="Cliente", nombre=cliente_nombre)
+                G.add_node(account_node, type="Cuenta", cuenta_id=cuenta_id,
+                           saldo_cifrado=saldo_cifrado, saldo_bs=0.0,
+                           codigo_verificacion="", fecha_conversion="")
+                G.add_edge(client_node, account_node, relation="POSEE_CUENTA")
+                inserted += 1
+
+        elif "MongoDB" in b_info["db_engine"] or "JSON" in b_info["db_engine"]:
+            lock = self.nosql_locks.get(bank_id, threading.Lock())
+            with lock:
+                json_path = os.path.join(self.data_dir, f"bank_{bank_id}_nosql.json")
+                existing = []
+                if os.path.exists(json_path):
+                    try:
+                        with open(json_path, "r") as f:
+                            existing = json.load(f)
+                    except (json.JSONDecodeError, ValueError):
+                        existing = []
+                existing_ids = {d["cuenta_id"] for d in existing}
+                for cuenta_id, cliente_nombre, saldo_cifrado in records:
+                    if cuenta_id not in existing_ids:
+                        existing.append({
+                            "cuenta_id": cuenta_id,
+                            "cliente_nombre": cliente_nombre,
+                            "saldo_usd_cifrado": saldo_cifrado,
+                            "saldo_bs": 0.0,
+                            "codigo_verificacion": "",
+                            "fecha_conversion": ""
+                        })
+                        existing_ids.add(cuenta_id)
+                        inserted += 1
+                with open(json_path, "w") as f:
+                    json.dump(existing, f)  # sin indent = mucho más rápido
+
+        else:
+            db_file = os.path.join(self.data_dir, f"bank_{bank_id}.db")
+            conn = sqlite3.connect(db_file, timeout=30)
+            conn.execute("PRAGMA journal_mode=WAL")    # lecturas concurrentes sin bloquear
+            conn.execute("PRAGMA synchronous=NORMAL")  # más rápido, seguro para uso local
+            cursor = conn.cursor()
+            cursor.executemany("""
+                INSERT OR REPLACE INTO CuentasBancarias
+                (CuentaId, ClienteNombre, SaldoUSDCifrado, SaldoBs, CodigoVerificacion, FechaConversion)
+                VALUES (?, ?, ?, 0.0, '', '')
+            """, records)
+            conn.commit()
+            inserted = len(records)
+            conn.close()
+
+        return inserted
+
     def get_encrypted_accounts(self, bank_id: int):
         if bank_id in self.banks_1_5:
             return self.banks_1_5[bank_id].get_encrypted_accounts()

@@ -283,30 +283,45 @@ def seed_bank_databases_from_csv(csv_path: str = "01 - Practica 2 Dataset.csv", 
         print(f"   - Banco #{b_id:2d}: {len(rows):5d} válidas -> Muestra ({pct_display:.2f}%): {len(sampled_b):4d} cuentas")
 
     cpu_cores = os.cpu_count() or 1
-    max_workers = max(4, min(32, cpu_cores * 4))
-    bank_locks = {b_id: threading.Lock() for b_id in range(1, 15)}
-    metrics = {"lock": threading.Lock(), "active": 0, "peak": 0, "workers": set()}
+    # Un hilo por banco — cada banco carga su lote completo de una sola vez
+    max_workers = min(14, cpu_cores * 2)
 
-    print(f"🧵 Carga multi-hilo: {max_workers} workers | {len(sampled_records)} cuentas")
+    print(f"⚡ Carga por banco en paralelo: {max_workers} hilos | {len(sampled_records)} cuentas")
     total_inserted = 0
-    insert_errors = 0
-    fallback_base = 100000
+    insert_errors  = 0
+    t_insert = time.time()
 
-    with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="ASFI-Seed") as pool:
+    # Agrupar registros ya sampleados por banco
+    bulk_by_bank: dict[int, list] = defaultdict(list)
+    for row in sampled_records:
+        banco_id = int(float(row["IdBanco"]))
+        cuenta_id = parse_account_id(row, len(bulk_by_bank[banco_id]) + 100000)
+        nombres   = str(row.get("Nombres",  "")).strip()
+        apellidos = str(row.get("Apellidos","")).strip()
+        cliente   = f"{nombres} {apellidos}".strip() or f"Cliente_{cuenta_id}"
+        saldo_usd = str(round(float(row["Saldo"]), 4))
+        bulk_by_bank[banco_id].append((cuenta_id, cliente, saldo_usd))
+
+    def _bulk_bank_job(b_id: int, records: list):
+        try:
+            n = bank_db_manager.bulk_insert_accounts(b_id, records)
+            return b_id, n, None
+        except Exception as ex:
+            return b_id, 0, str(ex)
+
+    with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="Bulk-Bank") as pool:
         futures = {
-            pool.submit(_insert_account_job, row, fallback_base + idx, bank_locks, metrics): idx
-            for idx, row in enumerate(sampled_records)
+            pool.submit(_bulk_bank_job, b_id, recs): b_id
+            for b_id, recs in bulk_by_bank.items()
         }
         for fut in as_completed(futures):
-            try:
-                if fut.result():
-                    total_inserted += 1
-            except Exception as ex:
+            b_id, n, err = fut.result()
+            if err:
                 insert_errors += 1
-                if insert_errors <= 5:
-                    print(f"   ⚠️ Error insertando: {ex}")
-            if total_inserted and total_inserted % 10000 == 0:
-                print(f"   … insertadas {total_inserted}/{len(sampled_records)}")
+                print(f"   ⚠️ Banco #{b_id}: {err}")
+            else:
+                total_inserted += n
+                print(f"   ✅ Banco #{b_id:2d}: {n} cuentas insertadas")
 
     elapsed = round(time.time() - t0, 4)
     throughput = round(total_inserted / elapsed, 2) if elapsed > 0 else 0.0
@@ -314,7 +329,7 @@ def seed_bank_databases_from_csv(csv_path: str = "01 - Practica 2 Dataset.csv", 
     print(
         f"\n🎉 Seed completado: {total_inserted} cuentas | "
         f"leídas={total_rows_read} descartadas={len(discarded_rows)} errores={insert_errors} | "
-        f"{elapsed}s | pico workers={metrics['peak']}/{max_workers} | {throughput} c/s\n"
+        f"{elapsed}s | {throughput} c/s\n"
     )
     return {
         "total_read": total_rows_read,
@@ -328,13 +343,12 @@ def seed_bank_databases_from_csv(csv_path: str = "01 - Practica 2 Dataset.csv", 
         "performance": {
             "cpu_cores": cpu_cores,
             "max_workers": max_workers,
-            "peak_concurrent_workers": metrics["peak"],
-            "distinct_worker_threads": len(metrics["workers"]),
             "elapsed_seconds": elapsed,
             "throughput_accounts_per_sec": throughput,
-            "execution_model": f"ThreadPoolExecutor(max_workers={max_workers}) + locks por banco",
+            "execution_model": "bulk_insert_accounts por banco (un hilo por banco, batch completo)",
         },
     }
+
 
 
 # Alias para compatibilidad
