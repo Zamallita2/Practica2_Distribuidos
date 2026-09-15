@@ -128,6 +128,37 @@ class BankMercantilMySQLAdapter:
             conn.commit()
             conn.close()
 
+    def bulk_insert_accounts(self, records: list):
+        """Una conexión, executemany, un commit — sea MySQL real o SQLite fallback."""
+        if self.engine_mode == "real":
+            conn = self._connect_mysql()
+            with conn.cursor() as cursor:
+                cursor.executemany(
+                    """
+                    INSERT INTO CuentasBancarias (CuentaId, ClienteNombre, SaldoUSDCifrado, SaldoBs, CodigoVerificacion, FechaConversion)
+                    VALUES (%s, %s, %s, 0.0, '', '')
+                    ON DUPLICATE KEY UPDATE ClienteNombre = VALUES(ClienteNombre), SaldoUSDCifrado = VALUES(SaldoUSDCifrado)
+                    """,
+                    records,
+                )
+            conn.commit()
+            conn.close()
+        else:
+            conn = self._connect_fallback()
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            conn.executemany(
+                """
+                INSERT OR REPLACE INTO CuentasBancarias
+                    (CuentaId, ClienteNombre, SaldoUSDCifrado, SaldoBs, CodigoVerificacion, FechaConversion)
+                VALUES (?, ?, ?, 0.0, '', '')
+                """,
+                records,
+            )
+            conn.commit()
+            conn.close()
+        return len(records)
+
     def get_encrypted_accounts(self):
         if self.engine_mode == "real":
             conn = self._connect_mysql()

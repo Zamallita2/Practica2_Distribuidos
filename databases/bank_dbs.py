@@ -174,8 +174,13 @@ class BankDatabaseManager:
             return 0
 
         if bank_id in self.banks_1_5:
+            adapter = self.banks_1_5[bank_id]
+            # Usar bulk si el adaptador lo soporta (bancos 2, 3, 5 optimizados)
+            if hasattr(adapter, "bulk_insert_accounts"):
+                return adapter.bulk_insert_accounts(records)
+            # Fallback: uno por uno para adaptadores sin bulk
             for cuenta_id, cliente_nombre, saldo_cifrado in records:
-                self.banks_1_5[bank_id].insert_encrypted_account(cuenta_id, cliente_nombre, saldo_cifrado)
+                adapter.insert_encrypted_account(cuenta_id, cliente_nombre, saldo_cifrado)
             return len(records)
 
         b_info = next((b for b in BANKS if b["id"] == bank_id), None)

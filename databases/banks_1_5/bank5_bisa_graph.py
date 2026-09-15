@@ -115,6 +115,29 @@ class BankBISAGraphAdapter:
         self.graph.add_edge(client_node, account_node, relacion="POSEE_CUENTA")
         self._persist()
 
+    def bulk_insert_accounts(self, records: list):
+        """
+        Inserción masiva: añade TODOS los nodos al grafo en memoria
+        y llama _persist() UNA sola vez al final.
+        records: lista de (cuenta_id, cliente_nombre, saldo_cifrado)
+        """
+        for cuenta_id, cliente_nombre, saldo_cifrado in records:
+            client_node = f"Cliente_{cliente_nombre.replace(' ', '_')}"
+            account_node = f"Cuenta_{cuenta_id}"
+            self.graph.add_node(client_node, tipo="Cliente", nombre=cliente_nombre)
+            self.graph.add_node(
+                account_node,
+                tipo="Cuenta",
+                cuenta_id=cuenta_id,
+                saldo_usd_cifrado=saldo_cifrado,
+                saldo_bs=0.0,
+                codigo_verificacion="",
+                fecha_conversion="",
+            )
+            self.graph.add_edge(client_node, account_node, relacion="POSEE_CUENTA")
+        self._persist()  # UN solo write a disco para todo el lote
+        return len(records)
+
     def get_encrypted_accounts(self):
         accounts = []
         nodes_iter = self.graph.nodes(data=True) if HAS_NETWORKX else self.graph.nodes_data.items()
