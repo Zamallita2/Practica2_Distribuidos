@@ -187,6 +187,15 @@ class ASFIHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
             _t.Thread(target=_bg_scan, daemon=True, name="LAN-Scan").start()
             self.send_json({"success": True, "message": "Escaneo iniciado en background"})
 
+        elif path == '/task':
+            # Workers piden su siguiente tarea (fallback puerto 8080)
+            worker_ip = self.client_address[0]
+            task = distributed_master.get_next_task_for_worker(worker_ip)
+            if task:
+                self.send_json({"has_task": True, **task})
+            else:
+                self.send_json({"has_task": False})
+
         else:
             self.send_error(404, "Endpoint not found")
 
@@ -456,6 +465,13 @@ class ASFIHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
             ))
             self.send_json(sweep_res)
 
+        elif path == '/done':
+            # Workers reportan tarea completada (fallback puerto 8080)
+            task_id = payload.get("task_id")
+            result = payload.get("result", {})
+            ok = distributed_master.report_task_done(task_id, result)
+            self.send_json({"success": ok})
+
         else:
             self.send_error(404, "Endpoint not found")
 
@@ -463,10 +479,30 @@ class ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     daemon_threads = True
 
 def run_server(port=PORT):
+    # ----------------------------------------------------------------
+    # Iniciar el servidor HTTP del Maestro Distribuido en puerto 9000
+    # Esto permite que los workers en otras PCs se conecten al maestro
+    # ----------------------------------------------------------------
+    from distributed.master_server import run_master_server, MASTER_PORT
+    master_thread = _threading.Thread(
+        target=run_master_server,
+        args=(MASTER_PORT,),
+        daemon=True,
+        name="MasterHTTP"
+    )
+    master_thread.start()
+
+    # Iniciar el worker local en background (modo single-node)
+    _ensure_local_worker()
+
+    # ----------------------------------------------------------------
+    # Servidor web principal (dashboard + API REST) en puerto 8080
+    # ----------------------------------------------------------------
     server_address = ('', port)
     httpd = ThreadedHTTPServer(server_address, ASFIHTTPRequestHandler)
     print(f"=========================================================================")
-    print(f"🌐  SERVIDOR WEB DASHBOARD ASFI - INICIADO EN HTTP://LOCALHOST:{port}")
+    print(f"🌐  SERVIDOR WEB DASHBOARD ASFI - HTTP://LOCALHOST:{port}")
+    print(f"🧭  SERVIDOR MAESTRO DISTRIBUIDO - PUERTO {MASTER_PORT} (workers LAN conectan aquí)")
     print(f"=========================================================================\n")
     try:
         httpd.serve_forever()

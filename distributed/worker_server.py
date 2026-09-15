@@ -32,7 +32,7 @@ import tempfile
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 WORKER_PORT = 9001
-MASTER_PORT = 9000
+MASTER_PORT = 8080   # Puerto del dashboard/API principal (siempre disponible)
 POLL_INTERVAL = 2.0   # segundos entre solicitudes de tarea al maestro
 
 
@@ -43,7 +43,6 @@ class DistributedWorker:
     """
     def __init__(self, master_ip: str = "127.0.0.1"):
         self.master_ip = master_ip
-        self.master_url = f"http://{master_ip}:{MASTER_PORT}"
         self._running = False
         self._lock = threading.Lock()
         self.current_task_id = None
@@ -53,6 +52,12 @@ class DistributedWorker:
             "total_errors": 0,
             "uptime_start": time.time(),
         }
+
+    @property
+    def master_url(self):
+        # Lee MASTER_PORT dinámicamente para que --master-port CLI funcione
+        import distributed.worker_server as _mod
+        return f"http://{self.master_ip}:{_mod.MASTER_PORT}"
 
     # ------------------------------------------------------------------ #
     # Comunicación con el Maestro                                         #
@@ -289,15 +294,21 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Worker de Carga Distribuida LAN — ASFI")
     parser.add_argument("--master-ip", "-m", type=str, default="127.0.0.1",
                         help="IP del servidor Maestro (default: 127.0.0.1)")
+    parser.add_argument("--master-port", "-P", type=int, default=MASTER_PORT,
+                        help=f"Puerto del maestro (default: {MASTER_PORT} = dashboard)")
     parser.add_argument("--port", "-p", type=int, default=WORKER_PORT,
                         help=f"Puerto del worker (default: {WORKER_PORT})")
     args = parser.parse_args()
 
     print(f"========================================================")
     print(f"🤖  WORKER DISTRIBUIDO ASFI")
-    print(f"   Maestro: {args.master_ip}:{MASTER_PORT}")
-    print(f"   Mi puerto: {args.port}")
+    print(f"   Maestro: {args.master_ip}:{args.master_port}")
+    print(f"   Mi puerto (deteccion LAN): {args.port}")
     print(f"========================================================\n")
+
+    # Sobreescribir MASTER_PORT con el valor del argumento
+    import distributed.worker_server as _ws
+    _ws.MASTER_PORT = args.master_port
 
     worker_thread = start_worker(master_ip=args.master_ip, port=args.port)
     try:
