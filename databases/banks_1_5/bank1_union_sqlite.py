@@ -30,15 +30,16 @@ class BankUnionSQLiteAdapter:
     def __init__(self, data_dir: str = "bank_data"):
         os.makedirs(data_dir, exist_ok=True)
         self.db_path = os.path.join(data_dir, "bank1_union.db")
-        self.create_schema()
+        self.create_schema(reset=False)
 
     def _connect(self):
         return sqlite3.connect(self.db_path)
 
-    def create_schema(self):
+    def create_schema(self, reset: bool = False):
         conn = self._connect()
         conn.executescript(SCHEMA_SQL)
-        conn.execute("DELETE FROM CuentasBancarias")
+        if reset:
+            conn.execute("DELETE FROM CuentasBancarias")
         conn.commit()
         conn.close()
 

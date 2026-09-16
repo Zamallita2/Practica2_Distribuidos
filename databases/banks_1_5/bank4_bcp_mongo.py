@@ -49,16 +49,18 @@ class BankBCPMongoAdapter:
                 self.engine_mode = "real"
             except Exception:
                 self.engine_mode = "local_fallback"
-        self.create_schema()
+        self.create_schema(reset=False)
 
-    def create_schema(self):
+    def create_schema(self, reset: bool = False):
         if self.engine_mode == "real":
-            self._collection.delete_many({})
+            if reset:
+                self._collection.delete_many({})
             self._collection.create_index("cuenta_id", unique=True)
         else:
             with self._lock:
-                with open(self.fallback_path, "w") as f:
-                    json.dump([], f)
+                if reset or not os.path.exists(self.fallback_path):
+                    with open(self.fallback_path, "w") as f:
+                        json.dump([], f)
 
     def _load_fallback(self):
         if not os.path.exists(self.fallback_path):

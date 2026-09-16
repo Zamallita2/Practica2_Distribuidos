@@ -45,6 +45,7 @@ class ASFICentralDatabase:
                 CuentaId BIGINT PRIMARY KEY,
                 BancoId INTEGER NOT NULL,
                 SaldoUSD REAL NOT NULL CHECK(SaldoUSD >= 0),
+                SaldoUSDCifrado TEXT DEFAULT '',
                 SaldoBs REAL NOT NULL CHECK(SaldoBs >= 0),
                 FechaConversion TEXT NOT NULL,
                 CodigoVerificacion CHAR(8) NOT NULL,
@@ -69,6 +70,12 @@ class ASFICentralDatabase:
         # Migración ligera por si la tabla ya existe sin la columna CodigoVerificacion
         try:
             cursor.execute("ALTER TABLE AuditLogs ADD COLUMN CodigoVerificacion CHAR(8) DEFAULT '';")
+        except sqlite3.OperationalError:
+            pass # Ya existe la columna
+
+        # Evidencia del payload cifrado recibido desde cada banco.
+        try:
+            cursor.execute("ALTER TABLE Cuentas ADD COLUMN SaldoUSDCifrado TEXT DEFAULT '';")
         except sqlite3.OperationalError:
             pass # Ya existe la columna
 
@@ -104,7 +111,9 @@ class ASFICentralDatabase:
         return None
 
     # --- GESTIÓN DE CUENTAS CONSOLIDADAS ---
-    def record_transaction(self, cuenta_id: int, banco_id: int, saldo_usd: float, saldo_bs: float, exchange_rate: float, verification_code: str, timestamp: str = None):
+    def record_transaction(self, cuenta_id: int, banco_id: int, saldo_usd: float, saldo_bs: float,
+                           exchange_rate: float, verification_code: str, timestamp: str = None,
+                           saldo_usd_cifrado: str = ""):
         if not timestamp:
             timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -114,15 +123,16 @@ class ASFICentralDatabase:
 
             # Insertar o actualizar cuenta consolidada en ASFI
             cursor.execute("""
-                INSERT INTO Cuentas (CuentaId, BancoId, SaldoUSD, SaldoBs, FechaConversion, CodigoVerificacion)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO Cuentas (CuentaId, BancoId, SaldoUSD, SaldoUSDCifrado, SaldoBs, FechaConversion, CodigoVerificacion)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(CuentaId) DO UPDATE SET
                     BancoId = excluded.BancoId,
                     SaldoUSD = excluded.SaldoUSD,
+                    SaldoUSDCifrado = excluded.SaldoUSDCifrado,
                     SaldoBs = excluded.SaldoBs,
                     FechaConversion = excluded.FechaConversion,
                     CodigoVerificacion = excluded.CodigoVerificacion
-            """, (cuenta_id, banco_id, saldo_usd, saldo_bs, timestamp, verification_code))
+            """, (cuenta_id, banco_id, saldo_usd, saldo_usd_cifrado, saldo_bs, timestamp, verification_code))
 
             # Registrar log de auditoría
             cursor.execute("""
@@ -138,8 +148,8 @@ class ASFICentralDatabase:
         if not transactions:
             return 0
         cuentas = [
-            (t["cuenta_id"], t["banco_id"], t["saldo_usd"], t["saldo_bs"],
-             t["timestamp"], t["codigo_verificacion"])
+            (t["cuenta_id"], t["banco_id"], t["saldo_usd"], t.get("saldo_usd_cifrado", ""),
+             t["saldo_bs"], t["timestamp"], t["codigo_verificacion"])
             for t in transactions
         ]
         logs = [
@@ -152,10 +162,11 @@ class ASFICentralDatabase:
             try:
                 cursor = conn.cursor()
                 cursor.executemany("""
-                    INSERT INTO Cuentas (CuentaId, BancoId, SaldoUSD, SaldoBs, FechaConversion, CodigoVerificacion)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    INSERT INTO Cuentas (CuentaId, BancoId, SaldoUSD, SaldoUSDCifrado, SaldoBs, FechaConversion, CodigoVerificacion)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(CuentaId) DO UPDATE SET
                         BancoId=excluded.BancoId, SaldoUSD=excluded.SaldoUSD,
+                        SaldoUSDCifrado=excluded.SaldoUSDCifrado,
                         SaldoBs=excluded.SaldoBs, FechaConversion=excluded.FechaConversion,
                         CodigoVerificacion=excluded.CodigoVerificacion
                 """, cuentas)

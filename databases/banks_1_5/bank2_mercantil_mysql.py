@@ -71,7 +71,7 @@ class BankMercantilMySQLAdapter:
                 self.engine_mode = "real"
             except Exception:
                 self.engine_mode = "local_fallback"
-        self.create_schema()
+        self.create_schema(reset=False)
 
     def _connect_mysql(self):
         conn = pymysql.connect(
@@ -86,18 +86,20 @@ class BankMercantilMySQLAdapter:
     def _connect_fallback(self):
         return sqlite3.connect(self.fallback_path)
 
-    def create_schema(self):
+    def create_schema(self, reset: bool = False):
         if self.engine_mode == "real":
             conn = self._connect_mysql()
             with conn.cursor() as cursor:
                 cursor.execute(SCHEMA_SQL_MYSQL)
-                cursor.execute("DELETE FROM CuentasBancarias")
+                if reset:
+                    cursor.execute("DELETE FROM CuentasBancarias")
             conn.commit()
             conn.close()
         else:
             conn = self._connect_fallback()
             conn.executescript(SCHEMA_SQL_SQLITE_FALLBACK)
-            conn.execute("DELETE FROM CuentasBancarias")
+            if reset:
+                conn.execute("DELETE FROM CuentasBancarias")
             conn.commit()
             conn.close()
 

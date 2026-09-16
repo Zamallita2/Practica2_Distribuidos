@@ -198,17 +198,15 @@ def resolve_seed_sample_rate(percent=None) -> float:
 def _insert_account_job(row: dict, fallback_idx: int, bank_locks: dict, metrics: dict):
     """
     Inserta una cuenta en la BD local del banco correspondiente.
-    NOTA: El saldo se guarda en USD plano — SIN CIFRAR.
-    El cifrado solo ocurre cuando la ASFI hace el barrido (process_engine.py),
-    que es el momento académicamente correcto según el flujo del sistema.
+    El banco conserva únicamente el saldo USD cifrado. La ASFI lo descifra al
+    recibirlo, convierte a Bs. y conserva la evidencia del payload cifrado.
     """
     banco_id = int(float(row["IdBanco"]))
     cuenta_id = parse_account_id(row, fallback_idx)
     nombres = str(row.get("Nombres", "")).strip()
     apellidos = str(row.get("Apellidos", "")).strip()
     cliente = f"{nombres} {apellidos}".strip() or f"Cliente_{cuenta_id}"
-    # Saldo USD en texto plano (el cifrado se aplicará en el barrido ASFI)
-    saldo_usd_plano = str(round(float(row["Saldo"]), 4))
+    saldo_usd_cifrado = encrypt_balance(banco_id, round(float(row["Saldo"]), 4))
 
     thread = threading.current_thread()
     with metrics["lock"]:
@@ -220,9 +218,9 @@ def _insert_account_job(row: dict, fallback_idx: int, bank_locks: dict, metrics:
         lock = bank_locks.get(banco_id)
         if lock:
             with lock:
-                bank_db_manager.insert_encrypted_account(banco_id, cuenta_id, cliente, saldo_usd_plano)
+                bank_db_manager.insert_encrypted_account(banco_id, cuenta_id, cliente, saldo_usd_cifrado)
         else:
-            bank_db_manager.insert_encrypted_account(banco_id, cuenta_id, cliente, saldo_usd_plano)
+            bank_db_manager.insert_encrypted_account(banco_id, cuenta_id, cliente, saldo_usd_cifrado)
         return True
     finally:
         with metrics["lock"]:
@@ -299,8 +297,8 @@ def seed_bank_databases_from_csv(csv_path: str = "01 - Practica 2 Dataset.csv", 
         nombres   = str(row.get("Nombres",  "")).strip()
         apellidos = str(row.get("Apellidos","")).strip()
         cliente   = f"{nombres} {apellidos}".strip() or f"Cliente_{cuenta_id}"
-        saldo_usd = str(round(float(row["Saldo"]), 4))
-        bulk_by_bank[banco_id].append((cuenta_id, cliente, saldo_usd))
+        saldo_usd_cifrado = encrypt_balance(banco_id, round(float(row["Saldo"]), 4))
+        bulk_by_bank[banco_id].append((cuenta_id, cliente, saldo_usd_cifrado))
 
     def _bulk_bank_job(b_id: int, records: list):
         try:

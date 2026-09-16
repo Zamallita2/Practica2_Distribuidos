@@ -57,10 +57,13 @@ class BankBISAGraphAdapter:
     def __init__(self, data_dir: str = "bank_data"):
         os.makedirs(data_dir, exist_ok=True)
         self.graph_path = os.path.join(data_dir, "bank5_bisa_graph.json")
-        self.create_schema()
+        self.create_schema(reset=False)
 
-    def create_schema(self):
+    def create_schema(self, reset: bool = False):
         self.graph = nx.DiGraph() if HAS_NETWORKX else SimpleGraph()
+        if not reset and os.path.exists(self.graph_path):
+            self._load()
+            return
         if os.path.exists(self.graph_path):
             try:
                 os.remove(self.graph_path)

@@ -42,17 +42,15 @@ class ASFICentralProcessEngine:
         cuenta_id = account_data["cuenta_id"]
         saldo_raw = account_data["saldo_usd_cifrado"]
 
-        # 1. Obtener el saldo USD
-        # El saldo está almacenado en plano (sin cifrar) desde la ingesta local.
-        # Se intenta parsear directamente como float; si falla (dato legado cifrado),
-        # se usa el descifrador del banco como fallback para retrocompatibilidad.
+        # 1. Descifrar el payload recibido desde el banco.
+        # No se acepta USD plano: así el barrido verifica realmente el flujo
+        # cifrado → envío a ASFI → descifrado → conversión.
         try:
-            saldo_usd = float(saldo_raw)
-        except (ValueError, TypeError):
-            try:
-                saldo_usd = decrypt_balance(bank_id, saldo_raw)
-            except Exception as e:
-                raise ValueError(f"Error al leer saldo de cuenta {cuenta_id} de Banco {bank_id}: {str(e)}")
+            saldo_usd = decrypt_balance(bank_id, saldo_raw)
+        except Exception as e:
+            raise ValueError(
+                f"Payload cifrado inválido para cuenta {cuenta_id} de Banco {bank_id}: {str(e)}"
+            )
 
         # 2. Convertir a bolivianos (Bs.) con 4 decimales de precisión
         saldo_bs = round(saldo_usd * exchange_rate, 4)
@@ -65,6 +63,7 @@ class ASFICentralProcessEngine:
             "cuenta_id": cuenta_id,
             "banco_id": bank_id,
             "saldo_usd": saldo_usd,
+            "saldo_usd_cifrado": saldo_raw,
             "saldo_bs": saldo_bs,
             "tipo_cambio": exchange_rate,
             "codigo_verificacion": verification_code,
@@ -81,7 +80,8 @@ class ASFICentralProcessEngine:
             cuenta_id=transaction["cuenta_id"], banco_id=transaction["banco_id"],
             saldo_usd=transaction["saldo_usd"], saldo_bs=transaction["saldo_bs"],
             exchange_rate=transaction["tipo_cambio"],
-            verification_code=transaction["codigo_verificacion"], timestamp=transaction["timestamp"]
+            verification_code=transaction["codigo_verificacion"], timestamp=transaction["timestamp"],
+            saldo_usd_cifrado=transaction["saldo_usd_cifrado"],
         )
 
         # 5. Escribir registro en archivo de auditoría física asfi_audit.log

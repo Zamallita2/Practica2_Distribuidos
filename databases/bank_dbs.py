@@ -70,7 +70,7 @@ class BankDatabaseManager:
     def _init_bank_stores(self, reset: bool = False):
         if reset:
             for b_id, adapter in self.banks_1_5.items():
-                adapter.create_schema()
+                adapter.create_schema(reset=True)
 
         for b in BANKS:
             b_id = b["id"]
