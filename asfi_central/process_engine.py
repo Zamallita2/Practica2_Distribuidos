@@ -62,6 +62,7 @@ class ASFICentralProcessEngine:
         return {
             "cuenta_id": cuenta_id,
             "banco_id": bank_id,
+            "nombre": account_data.get("cliente_nombre", ""),
             "saldo_usd": saldo_usd,
             "saldo_usd_cifrado": saldo_raw,
             "saldo_bs": saldo_bs,

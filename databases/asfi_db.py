@@ -44,6 +44,7 @@ class ASFICentralDatabase:
             CREATE TABLE IF NOT EXISTS Cuentas (
                 CuentaId BIGINT PRIMARY KEY,
                 BancoId INTEGER NOT NULL,
+                Nombre VARCHAR(150) NOT NULL,
                 SaldoUSD REAL NOT NULL CHECK(SaldoUSD >= 0),
                 SaldoUSDCifrado TEXT DEFAULT '',
                 SaldoBs REAL NOT NULL CHECK(SaldoBs >= 0),
@@ -123,11 +124,12 @@ class ASFICentralDatabase:
 
             # Insertar o actualizar cuenta consolidada en ASFI
             cursor.execute("""
-                INSERT INTO Cuentas (CuentaId, BancoId, SaldoUSD, SaldoUSDCifrado, SaldoBs, FechaConversion, CodigoVerificacion)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO Cuentas (CuentaId, BancoId, Nombre, SaldoUSD, SaldoUSDCifrado, SaldoBs, FechaConversion, CodigoVerificacion)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(CuentaId) DO UPDATE SET
                     BancoId = excluded.BancoId,
                     SaldoUSD = excluded.SaldoUSD,
+                    Nombre = excluded.Nombre,
                     SaldoUSDCifrado = excluded.SaldoUSDCifrado,
                     SaldoBs = excluded.SaldoBs,
                     FechaConversion = excluded.FechaConversion,
@@ -148,7 +150,7 @@ class ASFICentralDatabase:
         if not transactions:
             return 0
         cuentas = [
-            (t["cuenta_id"], t["banco_id"], t["saldo_usd"], t.get("saldo_usd_cifrado", ""),
+            (t["cuenta_id"], t["banco_id"], t["nombre"], t["saldo_usd"], t.get("saldo_usd_cifrado", ""),
              t["saldo_bs"], t["timestamp"], t["codigo_verificacion"])
             for t in transactions
         ]
@@ -162,10 +164,11 @@ class ASFICentralDatabase:
             try:
                 cursor = conn.cursor()
                 cursor.executemany("""
-                    INSERT INTO Cuentas (CuentaId, BancoId, SaldoUSD, SaldoUSDCifrado, SaldoBs, FechaConversion, CodigoVerificacion)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO Cuentas (CuentaId, BancoId, Nombre, SaldoUSD, SaldoUSDCifrado, SaldoBs, FechaConversion, CodigoVerificacion)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(CuentaId) DO UPDATE SET
                         BancoId=excluded.BancoId, SaldoUSD=excluded.SaldoUSD,
+                        Nombre=excluded.Nombre,
                         SaldoUSDCifrado=excluded.SaldoUSDCifrado,
                         SaldoBs=excluded.SaldoBs, FechaConversion=excluded.FechaConversion,
                         CodigoVerificacion=excluded.CodigoVerificacion
